@@ -28,6 +28,7 @@ export const MMGuide: ThemeNote = defineNoteConfig({
                 'image_gcot',
                 'vision_mct_reasoning_pipeline',
                 'image_region_caption_pipeline',
+                'image_region_caption_pipeline_api',
                 'image_scale_caption_pipeline',
                 'image_visual_only_mcq_pipeline',
             ],

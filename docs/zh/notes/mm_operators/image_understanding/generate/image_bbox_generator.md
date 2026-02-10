@@ -49,8 +49,7 @@ def run(
     self, 
     storage: DataFlowStorage, 
     input_image_key: str = "image", 
-    input_bbox_key: str = "bbox", 
-    output_key: str = "mdvp_record"
+    input_bbox_key: str = "bbox"
 ):
     ...
 
@@ -69,7 +68,7 @@ def run(
 3. **标准化与可视化 (Normalize & Visualize)**
 *
 * **标准化**：将 `[x, y, w, h]` 转换为归一化的 `[x1, y1, x2, y2]` 格式，并根据 `max_boxes` 进行截断或补零 (`0.0, 0.0, 0.0, 0.0`)。
-* **可视化**：在原图上绘制绿色矩形框和数字标签，保存至 `storage.cache_path`。
+* **可视化**：在原图上绘制矩形框和数字标签，保存至 `storage.cache_path`。
 
 
 4. **Prompt 生成**
@@ -89,7 +88,6 @@ def run(
 | `storage` | `DataFlowStorage` | 无 | DataFlow 存储对象，主要用于获取缓存路径 (`cache_path`)。 |
 | `input_image_key` | `str` | `"image"` | 输入 JSONL 中图像路径的字段名。 |
 | `input_bbox_key` | `str` | `"bbox"` | 输入 JSONL 中 BBox 数据的字段名。 |
-| `output_key` | `str` | `"mdvp_record"` | (保留字段) 用于标识输出记录的键名。 |
 
 ## 🧩 示例用法
 
@@ -97,49 +95,41 @@ def run(
 from dataflow.utils.storage import FileStorage
 from dataflow.operators.cv import ImageBboxGenerator, ExistingBBoxDataGenConfig
 
-# 1) 配置参数
-config = ExistingBBoxDataGenConfig(
-    max_boxes=5,
-    input_jsonl_path="./data/raw_images.jsonl",
-    output_jsonl_path="./data/processed_with_prompts.jsonl"
+cfg = ExistingBBoxDataGenConfig(
+    max_boxes=10,
+    input_jsonl_path="./data/image_region_caption/image_region_caption_demo.jsonl",
+    output_jsonl_path="./cache/image_region_caption/image_with_bbox_result.jsonl",
 )
-
-# 2) 初始化算子
-# 注意：此算子主要用于数据准备，不依赖 Serving 实例
 generator = ImageBboxGenerator(config=config)
 
-# 3) 准备 Storage (仅用于提供缓存路径)
 storage = FileStorage(
-    cache_path="./cache_vis_images",
-    file_name_prefix="bbox_gen"
+    first_entry_file_name="./data/image_region_caption/image_region_caption_demo.jsonl",
+    cache_path="./cache/image_region_caption",
+    file_name_prefix="region_caption",
+    cache_type="jsonl"
 )
 
-# 4) 执行处理
-# 自动读取 config 中的 input_jsonl_path，结果写入 output_jsonl_path
 generator.run(
     storage=storage,
-    input_image_key="image_path",
-    input_bbox_key="ground_truth_bbox" # 若文件中无此列，将自动提取 BBox
+    input_image_key="image",
+    input_bbox_key="bbox"
 )
 
 ```
 
 ### 🧾 输出数据格式 (Output JSONL)
 
-生成的 `output_jsonl_path` 文件中，每一行包含以下结构：
+生成的 `image_with_bbox_result.jsonl` 文件中，每一行包含以下结构：
 
 ```json
 {
-  "image": "/data/raw/cat.jpg",
-  "type": "without_bbox", // 或 "with_bbox"
-  "bbox": [[100, 200, 50, 60], ...], // 原始像素坐标 [x, y, w, h]
-  "normalized_bbox": [
-      [0.1, 0.2, 0.15, 0.26], 
-      [0.0, 0.0, 0.0, 0.0] // 补零填充
-  ],
-  "result_file": "./cache_vis_images",
-  "image_with_bbox": "./cache_vis_images/1_bbox_vis.jpg", // 可视化图片路径
-  "valid_bboxes_num": 1,
-  "prompt": "Describe the content of each marked region in the image. There are 1 regions: \<region1\> to \<region1\>."
+    "image": "./data/image_region_caption/20.png", 
+    "type": "with_bbox", 
+    "bbox": [[196, 104, 310, 495]], 
+    "normalized_bbox": [[0.128, 0.125, 0.329, 0.72], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]], 
+    "result_file": "./cache/image_region_caption", 
+    "image_with_bbox": "./cache/image_region_caption\\2_bbox_vis.jpg", 
+    "valid_bboxes_num": 1, 
+    "prompt": "Describe the content of each marked region in the image. There are 1 regions: <region1> to <region1>."
 }
 ```

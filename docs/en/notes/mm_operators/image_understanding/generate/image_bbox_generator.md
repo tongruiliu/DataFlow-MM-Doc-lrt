@@ -49,8 +49,7 @@ def run(
     self, 
     storage: DataFlowStorage, 
     input_image_key: str = "image", 
-    input_bbox_key: str = "bbox", 
-    output_key: str = "mdvp_record"
+    input_bbox_key: str = "bbox"
 ):
     ...
 
@@ -90,7 +89,6 @@ Reads raw data from `config.input_jsonl_path`.
 | `storage` | `DataFlowStorage` | N/A | Storage object, mainly used to provide the `cache_path`. |
 | `input_image_key` | `str` | `"image"` | Field name for image paths in the input JSONL. |
 | `input_bbox_key` | `str` | `"bbox"` | Field name for BBox data in the input JSONL. |
-| `output_key` | `str` | `"mdvp_record"` | (Reserved) Key name for the output record. |
 
 ## 🧩 Example Usage
 
@@ -98,50 +96,41 @@ Reads raw data from `config.input_jsonl_path`.
 from dataflow.utils.storage import FileStorage
 from dataflow.operators.cv import ImageBboxGenerator, ExistingBBoxDataGenConfig
 
-# 1) Configure Parameters
-config = ExistingBBoxDataGenConfig(
-    max_boxes=5,
-    input_jsonl_path="./data/raw_images.jsonl",
-    output_jsonl_path="./data/processed_with_prompts.jsonl"
+cfg = ExistingBBoxDataGenConfig(
+    max_boxes=10,
+    input_jsonl_path="./data/image_region_caption/image_region_caption_demo.jsonl",
+    output_jsonl_path="./cache/image_region_caption/image_with_bbox_result.jsonl",
 )
-
-# 2) Initialize Operator
-# Note: This operator is for data prep and does not require a Serving instance
 generator = ImageBboxGenerator(config=config)
 
-# 3) Prepare Storage (Only for providing cache path)
 storage = FileStorage(
-    cache_path="./cache_vis_images",
-    file_name_prefix="bbox_gen"
+    first_entry_file_name="./data/image_region_caption/image_region_caption_demo.jsonl",
+    cache_path="./cache/image_region_caption",
+    file_name_prefix="region_caption",
+    cache_type="jsonl"
 )
 
-# 4) Execute Processing
-# Automatically reads from config input, writes to config output
 generator.run(
     storage=storage,
-    input_image_key="image_path",
-    input_bbox_key="ground_truth_bbox" # Will auto-extract if this column is missing
+    input_image_key="image",
+    input_bbox_key="bbox"
 )
-
 ```
 
 ### 🧾 Output Data Format (Output JSONL)
 
-Each line in the `output_jsonl_path` file contains:
+Each line in the `image_with_bbox_result.jsonl` file contains:
 
 ```json
 {
-  "image": "/data/raw/cat.jpg",
-  "type": "without_bbox", // or "with_bbox"
-  "bbox": [[100, 200, 50, 60], ...], // Raw pixel coords [x, y, w, h]
-  "normalized_bbox": [
-      [0.1, 0.2, 0.15, 0.26], 
-      [0.0, 0.0, 0.0, 0.0] // Zero-padded
-  ],
-  "result_file": "./cache_vis_images",
-  "image_with_bbox": "./cache_vis_images/1_bbox_vis.jpg", // Path to visualized image
-  "valid_bboxes_num": 1,
-  "prompt": "Describe the content of each marked region in the image. There are 1 regions: \<region1\> to \<region1\>."
+    "image": "./data/image_region_caption/20.png", 
+    "type": "with_bbox", 
+    "bbox": [[196, 104, 310, 495]], 
+    "normalized_bbox": [[0.128, 0.125, 0.329, 0.72], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]], 
+    "result_file": "./cache/image_region_caption", 
+    "image_with_bbox": "./cache/image_region_caption\\2_bbox_vis.jpg", 
+    "valid_bboxes_num": 1, 
+    "prompt": "Describe the content of each marked region in the image. There are 1 regions: <region1> to <region1>."
 }
 
 ```
