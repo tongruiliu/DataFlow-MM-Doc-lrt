@@ -38,7 +38,7 @@ dataflowmm init
 ```
 这时你会看到：
 ```bash
-api_pipelines/image_region_caption_api_pipeline.py
+gpu_pipelines/image_region_caption_pipeline.py
 ```
 
 ### 第三步：下载示例数据
@@ -49,8 +49,7 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 ### 第四步：一键运行
 
 ```bash
-python api_pipelines/image_region_caption_api_pipeline.py \
-  --model_path "/path/to/Qwen2.5-VL-3B-Instruct" \
+python gpu_pipelines/image_region_caption_pipeline.py
 
 ```
 

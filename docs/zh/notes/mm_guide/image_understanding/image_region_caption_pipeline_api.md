@@ -57,7 +57,7 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 
 ### 第五步：配置参数
 
-在 `api_pipeline/image_region_caption_api_pipeline.py` 中配置 API 服务和输入数据路径：
+在 `api_pipelines/image_region_caption_api_pipeline.py` 中配置 API 服务和输入数据路径：
 
 ```python
 self.vlm_serving = APIVLMServing_openai(

@@ -66,7 +66,7 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 
 ### Step 5: Configure Parameters
 
-Configure the API service and input data paths in `api_pipeline/image_region_caption_api_pipeline.py`:
+Configure the API service and input data paths in `api_pipelines/image_region_caption_api_pipeline.py`:
 
 ```python
 self.vlm_serving = APIVLMServing_openai(
