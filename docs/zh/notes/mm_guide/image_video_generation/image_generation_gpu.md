@@ -65,7 +65,8 @@ self.serving = LocalImageGenServing(
 ### 第四步：运行流水线
 
 ```bash
-python dataflow/statics/gpu_pipelines/text_to_image_generation_pipeline.py
+python dataflow/statics/pipelines/gpu_pipelines/text_to_image_generation_pipeline.py \
+    --first_entry_file_name <your_input_text_file_path>
 ```
 
 生成的文件会默认保存在 `./cache_local/text2image_local` 文件夹内。
