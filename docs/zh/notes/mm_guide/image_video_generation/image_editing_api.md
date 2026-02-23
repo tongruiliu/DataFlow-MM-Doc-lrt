@@ -72,7 +72,7 @@ export DF_BASE_URL=<your_base_url>  # 可选
 
 - **基本用法**
 ```bash
-python dataflow/statics/api_pipelines/image_editing_api_pipeline.py \
+python dataflow/statics/pipelines/api_pipelines/image_editing_api_pipeline.py \
     --first_entry_file_name <your_input_data_file_path>
 ```
 
