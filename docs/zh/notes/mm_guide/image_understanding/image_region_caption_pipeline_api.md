@@ -52,7 +52,7 @@ api_pipelines/image_region_caption_api_pipeline.py
 
 ### 第四步：下载示例数据
 ```bash
-huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir data
+huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
 ```
 
 ### 第五步：配置参数
@@ -60,8 +60,22 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 在 `api_pipelines/image_region_caption_api_pipeline.py` 中配置 API 服务和输入数据路径：
 
 ```python
+    def __init__(
+        self,
+        first_entry_file: str = "../example_data/image_region_caption/image_region_caption_demo.jsonl",
+        cache_path: str = "../cache/image_region_caption",
+        file_name_prefix: str = "region_caption",
+        cache_type: str = "jsonl",
+        input_image_key: str = "image",
+        input_bbox_key: str = "bbox",
+        max_boxes: int = 10,
+        output_image_with_bbox_path: str = "../cache/image_region_caption/image_with_bbox_result.jsonl",
+    ):
+```
+
+```python
 self.vlm_serving = APIVLMServing_openai(
-            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # 任意兼容OpenAI格式的API平台
+            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             model_name="gpt-4o-mini",
             image_io=None,
             send_request_stream=False,
@@ -72,7 +86,8 @@ self.vlm_serving = APIVLMServing_openai(
 
 ### 第六步：一键运行
 ```bash
-python api_pipelines/image_region_caption_api_pipeline.py
+cd api_pipelines
+python image_region_caption_api_pipeline.py
 ```
 
 ---

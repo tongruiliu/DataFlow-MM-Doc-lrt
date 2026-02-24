@@ -60,13 +60,27 @@ api_pipelines/image_region_caption_api_pipeline.py
 ### Step 4: Download Sample Data
 
 ```bash
-huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir data
+huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
 
 ```
 
 ### Step 5: Configure Parameters
 
 Configure the API service and input data paths in `api_pipelines/image_region_caption_api_pipeline.py`:
+
+```python
+    def __init__(
+        self,
+        first_entry_file: str = "../example_data/image_region_caption/image_region_caption_demo.jsonl",
+        cache_path: str = "../cache/image_region_caption",
+        file_name_prefix: str = "region_caption",
+        cache_type: str = "jsonl",
+        input_image_key: str = "image",
+        input_bbox_key: str = "bbox",
+        max_boxes: int = 10,
+        output_image_with_bbox_path: str = "../cache/image_region_caption/image_with_bbox_result.jsonl",
+    ):
+```
 
 ```python
 self.vlm_serving = APIVLMServing_openai(
@@ -82,7 +96,8 @@ self.vlm_serving = APIVLMServing_openai(
 ### Step 6: Run with One Command
 
 ```bash
-python api_pipelines/image_region_caption_api_pipeline.py
+cd api_pipelines
+python image_region_caption_api_pipeline.py
 
 ```
 ---
