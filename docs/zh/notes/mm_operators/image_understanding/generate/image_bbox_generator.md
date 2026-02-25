@@ -97,14 +97,14 @@ from dataflow.operators.cv import ImageBboxGenerator, ExistingBBoxDataGenConfig
 
 cfg = ExistingBBoxDataGenConfig(
     max_boxes=10,
-    input_jsonl_path="./data/image_region_caption/image_region_caption_demo.jsonl",
-    output_jsonl_path="./cache/image_region_caption/image_with_bbox_result.jsonl",
+    input_jsonl_path="../example_data/image_region_caption/image_region_caption_demo.jsonl",
+    output_jsonl_path="../cache/image_region_caption/image_with_bbox_result.jsonl",
 )
 generator = ImageBboxGenerator(config=config)
 
 storage = FileStorage(
-    first_entry_file_name="./data/image_region_caption/image_region_caption_demo.jsonl",
-    cache_path="./cache/image_region_caption",
+    first_entry_file_name="../example_data/image_region_caption/image_region_caption_demo.jsonl",
+    cache_path="../cache/image_region_caption",
     file_name_prefix="region_caption",
     cache_type="jsonl"
 )
@@ -123,12 +123,12 @@ generator.run(
 
 ```json
 {
-    "image": "./data/image_region_caption/20.png", 
+    "image": "../example_data/image_region_caption/20.png", 
     "type": "with_bbox", 
     "bbox": [[196, 104, 310, 495]], 
     "normalized_bbox": [[0.128, 0.125, 0.329, 0.72], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]], 
-    "result_file": "./cache/image_region_caption", 
-    "image_with_bbox": "./cache/image_region_caption\\2_bbox_vis.jpg", 
+    "result_file": "../cache/image_region_caption", 
+    "image_with_bbox": "../cache/image_region_caption\\2_bbox_vis.jpg", 
     "valid_bboxes_num": 1, 
     "prompt": "Describe the content of each marked region in the image. There are 1 regions: <region1> to <region1>."
 }

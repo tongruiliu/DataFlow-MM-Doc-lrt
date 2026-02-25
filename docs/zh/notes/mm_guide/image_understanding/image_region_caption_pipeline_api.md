@@ -105,7 +105,7 @@ python image_region_caption_api_pipeline.py
 
 ```json
 {
-    "image": "./data/image_region_caption/20.jpg",
+    "image": "../example_data/image_region_caption/20.jpg",
     "bbox": [[196, 104, 310, 495], [50, 60, 100, 200]]
 }
 
@@ -149,10 +149,12 @@ python image_region_caption_api_pipeline.py
 
 ```json
 {
-    "image":".\/data\/image_region_caption\/20.png","type":"with_bbox",
+    "image":"..\/example_data\/image_region_caption\/20.png",
+    "type":"with_bbox",
     "bbox":[[196,104,310,495]],
     "normalized_bbox":[[0.128,0.125,0.329,0.72],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]],
-    "result_file":".\/cache\/image_region_caption","image_with_bbox":".\/cache\/image_region_caption\\2_bbox_vis.jpg",
+    "result_file":"..\/cache\/image_region_caption",
+    "image_with_bbox":"..\/cache\/image_region_caption\\2_bbox_vis.jpg",
     "valid_bboxes_num":1,
     "prompt":"Describe the content of each marked region in the image. There are 1 regions: <region1> to <region1>.",
     "answer":"In <region1>, the focus is on the lower half of a person wearing high-heeled shoes with an ornate design. The setting appears to be a kitchen, with items such as a table with floral tablecloth, a broom, and various kitchen utensils visible in the background. The legs of another person can also be seen, indicating there may be interaction happening in this domestic space. The overall scene captures a domestic and casual atmosphere."
@@ -168,9 +170,8 @@ python image_region_caption_api_pipeline.py
 
 ```python
 import os
-os.environ["DF_API_KEY"] = "sk-iaY19LU7WMT5QlK8LujFIG7RjI2omHLWYiCs4Do6imieLKOg"
+os.environ["DF_API_KEY"] = "sk-xxxx"
 
-import argparse
 from dataflow.operators.core_vision.generate.image_bbox_generator import (
     ImageBboxGenerator, 
     ExistingBBoxDataGenConfig
@@ -184,15 +185,14 @@ from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 class ImageRegionCaptionPipeline:
     def __init__(
         self,
-        first_entry_file: str = "./data/image_region_caption/image_region_caption_demo.jsonl",
-        cache_path: str = "./cache/image_region_caption",
+        first_entry_file: str = "../example_data/image_region_caption/image_region_caption_demo.jsonl",
+        cache_path: str = "../cache/image_region_caption",
         file_name_prefix: str = "region_caption",
         cache_type: str = "jsonl",
         input_image_key: str = "image",
         input_bbox_key: str = "bbox",
-        image_with_bbox_path: str = 'image_with_bbox',
         max_boxes: int = 10,
-        output_image_with_bbox_path: str = "./cache/image_region_caption/image_with_bbox_result.jsonl",
+        output_image_with_bbox_path: str = "../cache/image_region_caption/image_with_bbox_result.jsonl",
     ):
         self.bbox_storage = FileStorage(
             first_entry_file_name=first_entry_file,
@@ -214,7 +214,7 @@ class ImageRegionCaptionPipeline:
             cache_type=cache_type
         )
         self.vlm_serving = APIVLMServing_openai(
-            api_url="http://172.96.141.132:3001/v1", # Any API platform compatible with OpenAI format
+            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # Any API platform compatible with OpenAI format
             model_name="gpt-4o-mini",
             image_io=None,
             send_request_stream=False,
@@ -225,7 +225,6 @@ class ImageRegionCaptionPipeline:
         self.caption_generator = PromptedVQAGenerator(serving=self.vlm_serving,system_prompt="You are a helpful assistant.")
         self.input_image_key = input_image_key
         self.input_bbox_key = input_bbox_key
-        self.image_with_bbox_path=image_with_bbox_path
         self.bbox_record=None
 
     def forward(self):
@@ -243,29 +242,7 @@ class ImageRegionCaptionPipeline:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Image region caption with DataFlow")
-    parser.add_argument("--first_entry_file", default="./data/image_region_caption/image_region_caption_demo.jsonl")
-    parser.add_argument("--cache_path", default="./cache/image_region_caption")
-    parser.add_argument("--file_name_prefix", default="region_caption")
-    parser.add_argument("--cache_type", default="jsonl")
-    parser.add_argument("--input_image_key", default="image")
-    parser.add_argument("--input_bbox_key", default="bbox")
-
-    parser.add_argument("--max_boxes", type=int, default=10)
-    parser.add_argument("--output_image_with_bbox_path", default="./cache/image_region_caption/image_with_bbox_result.jsonl")
-
-    args = parser.parse_args()
-
-    pipe = ImageRegionCaptionPipeline(
-        first_entry_file=args.first_entry_file,
-        cache_path=args.cache_path,
-        file_name_prefix=args.file_name_prefix,
-        cache_type=args.cache_type,
-        input_image_key=args.input_image_key,
-        input_bbox_key=args.input_bbox_key,
-        max_boxes=args.max_boxes,
-        output_image_with_bbox_path=args.output_image_with_bbox_path,
-    )
+    pipe = ImageRegionCaptionPipeline()
     pipe.forward()
 
 ```

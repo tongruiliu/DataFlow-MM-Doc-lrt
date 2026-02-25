@@ -59,7 +59,7 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
         self,
         model_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
         hf_cache_dir: str = "~/.cache/huggingface",
-        download_dir: str = "./ckpt/models",
+        download_dir: str = "../ckpt/models/Qwen2.5-VL-3B-Instruct",
         first_entry_file: str = "../example_data/image_region_caption/image_region_caption_demo.jsonl",
         cache_path: str = "../cache/image_region_caption",
         file_name_prefix: str = "region_caption",
@@ -70,6 +70,11 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
         output_image_with_bbox_path: str = "../cache/image_region_caption/image_with_bbox_result.jsonl",
     ):
 ```
+> **⚠️ Important Note on Model Path Configuration (Taking `Qwen2.5-VL-3B-Instruct` as an example):**
+> 
+> * **If you have already downloaded the model files:** Please change `model_path` to your local model path. **Crucially**, ensure that the model folder is named exactly `Qwen2.5-VL-3B-Instruct`; otherwise, the framework will fail to recognize it.
+> * **If you haven't downloaded the model yet:** You must specify a `download_dir` parameter that ends with `Qwen2.5-VL-3B-Instruct` (as shown in the default parameters). Failure to do so will also result in the model not being recognized after downloading.
+
 
 ### Step 5: Run
 
@@ -77,6 +82,44 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 cd gpu_pipelines
 python image_region_caption_pipeline.py
 ```
+> **🛠️ Troubleshooting**
+> 
+> **Issue 1:** If you encounter a CUDA library conflict error similar to the following:
+> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
+> 
+> **Solution:** This is usually caused by conflicting environment variables. Run the script with an empty `LD_LIBRARY_PATH`:
+> ```bash
+> LD_LIBRARY_PATH="" python image_region_caption_pipeline.py
+> ```
+> 
+> **Issue 2:** If you are using **Qwen series models** and encounter the following error:
+> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
+> 
+> **Solution:** Open the `config.json` file located in your model folder, find the `rope_scaling` section, and change the key `"type"` to `"rope_type"`.
+> 
+> **Before modification:**
+> ```json
+> "rope_scaling": {
+>   "type": "mrope",
+>   "mrope_section": [
+>     16,
+>     24,
+>     24
+>   ]
+> }
+> ```
+> 
+> **After modification:**
+> ```json
+> "rope_scaling": {
+>   "rope_type": "mrope",
+>   "mrope_section": [
+>     16,
+>     24,
+>     24
+>   ]
+> }
+> ```
 
 ---
 
@@ -93,7 +136,7 @@ The input data typically contains the image path and a list of corresponding bou
 
 ```json
 {
-    "image": "./data/image_region_caption/20.jpg",
+    "image": "../example_data/image_region_caption/20.jpg",
     "bbox": [[196, 104, 310, 495], [50, 60, 100, 200]]
 }
 
@@ -138,10 +181,12 @@ The final generated output data includes the processed image path and the genera
 
 ```json
 {
-    "image":".\/data\/image_region_caption\/20.png","type":"with_bbox",
+    "image":"..\/example_data\/image_region_caption\/20.png",
+    "type":"with_bbox",
     "bbox":[[196,104,310,495]],
     "normalized_bbox":[[0.128,0.125,0.329,0.72],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0],[0.0,0.0,0.0,0.0]],
-    "result_file":".\/cache\/image_region_caption","image_with_bbox":".\/cache\/image_region_caption\\2_bbox_vis.jpg",
+    "result_file":"..\/cache\/image_region_caption",
+    "image_with_bbox":"..\/cache\/image_region_caption\\2_bbox_vis.jpg",
     "valid_bboxes_num":1,
     "prompt":"Describe the content of each marked region in the image. There are 1 regions: <region1> to <region1>.",
     "answer":"In <region1>, the focus is on the lower half of a person wearing high-heeled shoes with an ornate design. The setting appears to be a kitchen, with items such as a table with floral tablecloth, a broom, and various kitchen utensils visible in the background. The legs of another person can also be seen, indicating there may be interaction happening in this domestic space. The overall scene captures a domestic and casual atmosphere."
@@ -155,7 +200,6 @@ The final generated output data includes the processed image path and the genera
 Below is the complete `ImageRegionCaptionPipeline` code implementation.
 
 ```python
-import argparse
 from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
 from dataflow.operators.core_vision.generate.image_bbox_generator import (
     ImageBboxGenerator, 
@@ -170,19 +214,17 @@ from dataflow.utils.storage import FileStorage
 class ImageRegionCaptionPipeline:
     def __init__(
         self,
-        model_path: str,
-        *,
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
-        first_entry_file: str = "./data/image_region_caption/image_region_caption_demo.jsonl",
-        cache_path: str = "./cache/image_region_caption",
+        model_path: str = "Qwen/Qwen2.5-VL-3B-Instruct",
+        hf_cache_dir: str = "~/.cache/huggingface",
+        download_dir: str = "../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        first_entry_file: str = "../example_data/image_region_caption/image_region_caption_demo.jsonl",
+        cache_path: str = "../cache/image_region_caption",
         file_name_prefix: str = "region_caption",
         cache_type: str = "jsonl",
         input_image_key: str = "image",
         input_bbox_key: str = "bbox",
-        image_with_bbox_path: str = 'image_with_bbox',
         max_boxes: int = 10,
-        output_image_with_bbox_path: str = "./cache/image_region_caption/image_with_bbox_result.jsonl",
+        output_image_with_bbox_path: str = "../cache/image_region_caption/image_with_bbox_result.jsonl",
     ):
         self.bbox_storage = FileStorage(
             first_entry_file_name=first_entry_file,
@@ -216,7 +258,6 @@ class ImageRegionCaptionPipeline:
         self.caption_generator = PromptedVQAGenerator(serving=self.serving,)
         self.input_image_key = input_image_key
         self.input_bbox_key = input_bbox_key
-        self.image_with_bbox_path=image_with_bbox_path
         self.bbox_record=None
 
     def forward(self):
@@ -234,34 +275,7 @@ class ImageRegionCaptionPipeline:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Image region caption with DataFlow")
-    parser.add_argument("--model_path", default="Qwen/Qwen2.5-VL-3B-Instruct")
-    parser.add_argument("--hf_cache_dir", default="~/.cache/huggingface")
-    parser.add_argument("--download_dir", default="./ckpt/models")
-    parser.add_argument("--first_entry_file", default="./data/image_region_caption/image_region_caption_demo.jsonl")
-    parser.add_argument("--cache_path", default="./cache/image_region_caption")
-    parser.add_argument("--file_name_prefix", default="region_caption")
-    parser.add_argument("--cache_type", default="jsonl")
-    parser.add_argument("--input_image_key", default="image")
-    parser.add_argument("--input_bbox_key", default="bbox")
-    parser.add_argument("--max_boxes", type=int, default=10)
-    parser.add_argument("--output_image_with_bbox_path", default="./cache/image_region_caption/image_with_bbox_result.jsonl")
-
-    args = parser.parse_args()
-
-    pipe = ImageRegionCaptionPipeline(
-        model_path=args.model_path,
-        hf_cache_dir=args.hf_cache_dir,
-        download_dir=args.download_dir,
-        first_entry_file=args.first_entry_file,
-        cache_path=args.cache_path,
-        file_name_prefix=args.file_name_prefix,
-        cache_type=args.cache_type,
-        input_image_key=args.input_image_key,
-        input_bbox_key=args.input_bbox_key,
-        max_boxes=args.max_boxes,
-        output_image_with_bbox_path=args.output_image_with_bbox_path
-    )
+    pipe = ImageRegionCaptionPipeline()
     pipe.forward()
 
 ```
