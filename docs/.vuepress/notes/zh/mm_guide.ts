@@ -46,8 +46,7 @@ export const MMGuide: ThemeNote = defineNoteConfig({
                 'video_clip_and_filter',
                 'video_qa',
                 'video_cotqa',
-                'video_longvideo_cotqa_api',
-                'multirole_videoqa_pipeline'
+                'video_longvideo_cotqa_api'
             ],
         },
         {

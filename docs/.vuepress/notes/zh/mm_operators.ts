@@ -42,8 +42,7 @@ export const MMOperators: ThemeNote = defineNoteConfig({
                         // 'image_region_caption',
                         // 'image_scale_caption',
                         // 'image_gcot',
-                        // 'image_caprl',
-                        // 'multirole_videoqa',
+                        // 'image_caprl'
                     ]
                 },
                 {
