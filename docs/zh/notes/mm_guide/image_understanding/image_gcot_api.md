@@ -47,68 +47,52 @@ gpu_pipelines/image_gcot_pipeline.py
 huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
 ```
 
-### 第四步：配置参数
+### 第四步：配置 API Key
 
-```bash
-if __name__ == "__main__":
-    pipe = ImageGCoTPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
-    )
-    pipe.forward()
+在 `api_pipelines/image_gcot_api_pipeline.py` 中设置 API Key 环境变量：
 
+```python
+import os
+os.environ["DF_API_KEY"] = "your_api_key"
 ```
-> **⚠️ 模型路径配置的重要提示（以 `Qwen2.5-VL-3B-Instruct` 为例）：**
-> 
-> * **如果您已经下载好了模型文件**：请将 `model_path` 修改为您的本地模型路径。**务必保证**模型存放的最终文件夹名称精确为 `Qwen2.5-VL-3B-Instruct`，否则底层解析时将无法正确匹配和识别该模型。
-> * **如果您还未下载模型（需要自动下载）**：请一定要指定 `download_dir` 参数，并且该目录路径**必须以** `Qwen2.5-VL-3B-Instruct` **结尾**（正如默认参数所示），否则下载完成后同样会导致框架无法识别模型。
 
-### 第五步：一键运行
+### 第五步：配置参数
 
-```bash
-cd gpu_pipelines
-python image_gcot_pipeline.py
+在 `api_pipelines/image_region_caption_api_pipeline.py` 中配置 API 服务和输入数据路径：
+
+```python
+    def __init__(
+        self,
+        *,
+        first_entry_file: str,
+        cache_path: str = "../cache/cache_gcot",
+        file_name_prefix: str = "gcot",
+        # Keys
+        question_key: str = "question",
+        answer_key: str = "answer",
+        image_key: str = "image",
+        output_key: str = "gcot",
+        # Config
+        vllm_max_tokens: int = 512
+    ):
 ```
-> **🛠️ 常见问题排查 (Troubleshooting)**
-> 
-> **问题 1：** 如果遇到类似如下的动态链接库冲突报错：
-> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
-> 
-> **解决方法：** 这通常是环境变量干扰导致的。请在运行命令前清空 `LD_LIBRARY_PATH`：
-> ```bash
-> LD_LIBRARY_PATH="" python image_gcot_pipeline.py
-> ```
-> 
-> **问题 2：** 如果您使用的是 **Qwen 系列模型**，并且遇到以下报错：
-> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
-> 
-> **解决方法：** 打开模型文件夹下的 `config.json` 文件，找到 `rope_scaling` 配置块，将 `"type"` 字段修改为 `"rope_type"` 即可。
-> 
-> **修改前：**
-> ```json
-> "rope_scaling": {
->   "type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> ```
-> 
-> **修改后：**
-> ```json
-> "rope_scaling": {
->   "rope_type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> ```
+
+```python
+self.vlm_serving = APIVLMServing_openai(
+            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
+        )
+```
+
+### 第六步：一键运行
+```bash
+cd api_pipelines
+python image_gcot_api_pipeline.py
+```
 
 ---
 
@@ -182,9 +166,12 @@ Step 1: Analyze the text visible in the image, which includes a list of actors b
 
 ## 4. 流水线示例
 
-以下是完整的 `ImageGCoTPipeline` 代码实现。
+以下是完整的 `ImageGCoTAPIPipeline` 代码实现。
 
 ```python
+import os
+os.environ["DF_API_KEY"] = "sk-xxxx"
+
 import re
 from typing import List, Dict, Any
 import argparse
@@ -196,7 +183,7 @@ from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
 from dataflow.operators.core_vision import PromptTemplatedVQAGenerator, VLMBBoxGenerator
 from dataflow.operators.core_text import FunctionalRefiner
 from dataflow.prompts.prompt_template import NamedPlaceholderPromptTemplate
-
+from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 GCOT_PROMPT_TEMPLATE = (
     "Question: {question}\n"
     "Answer: {answer}\n\n"
@@ -289,10 +276,7 @@ def inject_bboxes_logic(cot_text: str, bbox_map: Dict[str, List[str]]) -> str:
 class ImageGCoTPipeline:
     def __init__(
         self,
-        model_path: str,
         *,
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
         first_entry_file: str,
         cache_path: str = "../cache/cache_gcot",
         file_name_prefix: str = "gcot",
@@ -310,15 +294,14 @@ class ImageGCoTPipeline:
             file_name_prefix=file_name_prefix,
             cache_type="jsonl"
         )
-        
-        # [单一模型 Serving]
-        self.vlm_serving = LocalModelVLMServing_vllm(
-            hf_model_name_or_path=model_path,
-            hf_cache_dir=hf_cache_dir,
-            hf_local_dir=download_dir,
-            vllm_tensor_parallel_size=1,
-            vllm_temperature=0.7,
-            vllm_max_tokens=vllm_max_tokens
+
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
         )
         
         self.keys = {
@@ -399,10 +382,7 @@ class ImageGCoTPipeline:
 
 if __name__ == "__main__":
     pipe = ImageGCoTPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl"
     )
     pipe.forward()
 
