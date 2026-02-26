@@ -1,8 +1,8 @@
 ---
-title: ScaleCap High-Density Caption Pipeline
+title: ScaleCap High-Density Caption Pipeline (API version)
 icon: mdi:image-text
 createTime: 2026/01/11 22:08:57
-permalink: /en/mm_guide/image_scale_caption_pipeline/
+permalink: /en/mm_guide/image_scale_caption_pipeline_api/
 ---
 
 ## 1. Overview
@@ -47,7 +47,7 @@ dataflowmm init
 You will then see:
 
 ```bash
-gpu_pipelines/image_scale_caption_pipeline.py
+api_pipelines/image_scale_caption_api_pipeline.py
 
 ```
 
@@ -58,82 +58,54 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 
 ```
 
-### Step 4: Configure Parameters
+### Step 4: Configure API Key
+
+Set your API Key environment variable in `api_pipelines/image_scale_caption_api_pipeline.py`:
 
 ```python
-if __name__ == "__main__":
-    pipe = ImageScaleCaptionPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
-        device="cuda",
-        first_entry_file="../example_data/capsbench_images/image_scale_caption_demo.jsonl",
-        cache_path="../cache/image_scale_caption",
-        file_name_prefix="scalecap",
-        input_image_key="image",
-        output_key="final_caption",
-        vllm_tensor_parallel_size=1,
-        vllm_max_tokens=1024
-    )
-    pipe.forward()
+import os
+os.environ["DF_API_KEY"] = "your_api_key"
 
 ```
 
-> **⚠️ Important Note on Model Path Configuration (Taking `Qwen2.5-VL-3B-Instruct` as an example):**
-> * **If you have already downloaded the model files:** Please change `model_path` to your local model path. **Crucially**, ensure that the model folder is named exactly `Qwen2.5-VL-3B-Instruct`; otherwise, the framework will fail to recognize it.
-> * **If you haven't downloaded the model yet:** You must specify a `download_dir` parameter that ends with `Qwen2.5-VL-3B-Instruct` (as shown in the default parameters). Failure to do so will also result in the model not being recognized after downloading.
-> 
-> 
+### Step 5: Configure Parameters
 
-### Step 5: Run
+Configure the API service and input data paths in `api_pipelines/image_scale_caption_api_pipeline.py`:
+
+```python
+    def __init__(
+        self,
+        # Storage params
+        first_entry_file: str = "../example_data/capsbench_images/image_scale_caption_demo.jsonl",
+        cache_path: str = "../cache/image_scale_caption",
+        file_name_prefix: str = "scalecap",
+        cache_type: str = "jsonl",
+        # Keys
+        input_image_key: str = "image",
+        output_key: str = "final_caption",
+    ):
+
+```
+
+```python
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="[https://dashscope.aliyuncs.com/compatible-mode/v1](https://dashscope.aliyuncs.com/compatible-mode/v1)", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
+        )
+
+```
+
+### Step 6: Run with One Command
 
 ```bash
-cd gpu_pipelines
-python image_scale_caption_pipeline.py
+cd api_pipelines
+python image_scale_caption_api_pipeline.py
 
 ```
-
-> **🛠️ Troubleshooting**
-> **Issue 1:** If you encounter a CUDA library conflict error similar to the following:
-> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
-> **Solution:** This is usually caused by conflicting environment variables. Run the script with an empty `LD_LIBRARY_PATH`:
-> ```bash
-> LD_LIBRARY_PATH="" python image_scale_caption_pipeline.py
-> 
-> ```
-> 
-> 
-> **Issue 2:** If you are using **Qwen series models** and encounter the following error:
-> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
-> **Solution:** Open the `config.json` file located in your model folder, find the `rope_scaling` section, and change the key `"type"` to `"rope_type"`.
-> **Before modification:**
-> ```json
-> "rope_scaling": {
->   "type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
-> **After modification:**
-> ```json
-> "rope_scaling": {
->   "rope_type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
 
 ---
 
@@ -220,23 +192,25 @@ The output data records the entire pipeline process for easy debugging and analy
 
 ## 4. Pipeline Example
 
-Below is the complete `ImageScaleCaptionPipeline` code implementation (GPU Version).
+Below is the complete `ImageScaleCaptionPipeline` code implementation (API Version).
 
 ```python
+import os
+os.environ["DF_API_KEY"] = "sk-xxxx"
+
+
 import re
 import argparse
 from typing import Callable, Any, List
 
 from dataflow.utils.storage import FileStorage
 
-from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
-
 from dataflow.prompts.prompt_template import NamedPlaceholderPromptTemplate
 from dataflow.prompts.image import ImageScaleCaptionPrompt
 
 from dataflow.operators.core_vision import PromptedVQAGenerator, BatchVQAGenerator, VisualGroundingRefiner
 from dataflow.operators.core_text import PromptTemplatedQAGenerator, FunctionalRefiner
-
+from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 
 def split_sentences(text: str) -> List[str]:
     """将文本拆分为句子列表"""
@@ -304,11 +278,6 @@ def parse_questions_logic(text: str, max_q: int = 20) -> List[str]:
 class ImageScaleCaptionPipeline:
     def __init__(
         self,
-        model_path: str,
-        *,
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
-        device: str = "cuda",
         # Storage params
         first_entry_file: str = "images.jsonl",
         cache_path: str = "./cache_scalecap",
@@ -332,14 +301,13 @@ class ImageScaleCaptionPipeline:
         )
 
         # 2. Serving
-        self.serving = LocalModelVLMServing_vllm(
-            hf_model_name_or_path=model_path,
-            hf_cache_dir=hf_cache_dir,
-            hf_local_dir=download_dir,
-            vllm_tensor_parallel_size=vllm_tensor_parallel_size,
-            vllm_temperature=vllm_temperature,
-            vllm_top_p=vllm_top_p,
-            vllm_max_tokens=vllm_max_tokens,
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="[https://dashscope.aliyuncs.com/compatible-mode/v1](https://dashscope.aliyuncs.com/compatible-mode/v1)", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
         )
 
         # 3. Prompts
@@ -357,7 +325,7 @@ class ImageScaleCaptionPipeline:
         
         # 生成初稿 (使用通用 PromptedVQAGenerator)
         self.gen_init_caption = PromptedVQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             system_prompt="You are a helpful assistant."
         )
 
@@ -367,7 +335,7 @@ class ImageScaleCaptionPipeline:
         
         # 视觉自检 (保留 Yes 的句子)
         self.refine_golden = VisualGroundingRefiner(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template="Given the image, is the description '{text}' directly supported by visual evidence? Answer strictly yes or no."
         )
 
@@ -381,7 +349,7 @@ class ImageScaleCaptionPipeline:
             join_list_with="\n"
         )
         self.gen_questions_text = PromptTemplatedQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template=tpl_q
         )
         
@@ -390,11 +358,11 @@ class ImageScaleCaptionPipeline:
 
         # --- Step D: Generate Answers ---
         # 批量回答 (One Image -> Many Qs)
-        self.gen_answers = BatchVQAGenerator(serving=self.serving)
+        self.gen_answers = BatchVQAGenerator(serving=self.vlm_serving)
         
         # 回答过滤
         self.refine_answers = VisualGroundingRefiner(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template="Given the image, is the statement '{text}' grounded in the image and not generic? Answer strictly yes or no."
         )
 
@@ -405,7 +373,7 @@ class ImageScaleCaptionPipeline:
             join_list_with="\n"
         )
         self.gen_final_caption = PromptTemplatedQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template=tpl_final
         )
 
@@ -493,19 +461,13 @@ class ImageScaleCaptionPipeline:
 
 
 if __name__ == "__main__":
-    pipe = ImageScaleCaptionPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
-        device="cuda",
-        
+
+    pipe = ImageScaleCaptionPipeline( 
         first_entry_file="../example_data/capsbench_images/image_scale_caption_demo.jsonl",
         cache_path="../cache/image_scale_caption",
         file_name_prefix="scalecap",
-        
         input_image_key="image",
         output_key="final_caption",
-        
         vllm_tensor_parallel_size=1,
         vllm_max_tokens=1024
     )

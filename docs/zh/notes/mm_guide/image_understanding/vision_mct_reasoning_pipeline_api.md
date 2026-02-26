@@ -1,8 +1,8 @@
 ---
-title: 视觉 MCTS 推理链生成流水线
+title: 视觉 MCTS 推理链生成流水线（API版）
 icon: mdi:image-text
 createTime: 2026/01/11 21:59:59
-permalink: /zh/mm_guide/vision_mct_reasoning_pipeline/
+permalink: /zh/mm_guide/vision_mct_reasoning_pipeline_api/
 ---
 
 ## 1. 概述
@@ -45,7 +45,7 @@ dataflowmm init
 这时你会看到：
 
 ```bash
-gpu_pipelines/vision_mcts_pipeline.py
+api_pipelines/vision_mcts_api_pipeline.py
 
 ```
 
@@ -56,78 +56,35 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 
 ```
 
-### 第四步：配置参数
+### 第四步：配置 API Key
 
-确保输入文件（jsonl）包含 `tree` 字段（用于提取）或仅包含 `question/image`（用于生成）：
+在 `api_pipelines/vision_mcts_api_pipeline.py` 中设置 API Key 环境变量：
 
 ```python
-if __name__ == "__main__":
+import os
+os.environ["DF_API_KEY"] = "your_api_key"
+
+```
+
+### 第五步：配置参数
+
+配置 API 服务和输入数据路径。确保输入文件（jsonl）包含 `tree` 字段（用于提取）或仅包含 `question/image`（用于生成）：
+
+```python
     pipe = VisionMCTSReasoningPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
         first_entry_file="../example_data/capsbench_images/visual_mct_reasoning_demo.jsonl",
         prompt_type="spatial",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
     )
-    pipe.forward()
 
 ```
 
-> **⚠️ 模型路径配置的重要提示（以 `Qwen2.5-VL-3B-Instruct` 为例）：**
-> * **如果您已经下载好了模型文件**：请将 `model_path` 修改为您的本地模型路径。**务必保证**模型存放的最终文件夹名称精确为 `Qwen2.5-VL-3B-Instruct`，否则底层解析时将无法正确匹配和识别该模型。
-> * **如果您还未下载模型（需要自动下载）**：请一定要指定 `download_dir` 参数，并且该目录路径**必须以** `Qwen2.5-VL-3B-Instruct` **结尾**（正如默认参数所示），否则下载完成后同样会导致框架无法识别模型。
-> 
-> 
-
-### 第五步：一键运行
+### 第六步：一键运行
 
 ```bash
-cd gpu_pipelines
-python vision_mcts_pipeline.py
+cd api_pipelines
+python vision_mcts_api_pipeline.py
 
 ```
-
-> **🛠️ 常见问题排查 (Troubleshooting)**
-> **问题 1：** 如果遇到类似如下的动态链接库冲突报错：
-> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
-> **解决方法：** 这通常是环境变量干扰导致的。请在运行命令前清空 `LD_LIBRARY_PATH`：
-> ```bash
-> LD_LIBRARY_PATH="" python vision_mcts_pipeline.py
-> 
-> ```
-> 
-> 
-> **问题 2：** 如果您使用的是 **Qwen 系列模型**，并且遇到以下报错：
-> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
-> **解决方法：** 打开模型文件夹下的 `config.json` 文件，找到 `rope_scaling` 配置块，将 `"type"` 字段修改为 `"rope_type"` 即可。
-> **修改前：**
-> ```json
-> "rope_scaling": {
->   "type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
-> **修改后：**
-> ```json
-> "rope_scaling": {
->   "rope_type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
 
 ---
 
@@ -195,24 +152,22 @@ python vision_mcts_pipeline.py
 
 ## 4. 流水线示例
 
-以下是完整的 `VisionMCTSReasoningPipeline` 代码实现 (GPU 版本)。
+以下是完整的 `VisionMCTSReasoningPipeline` 代码实现 (API 版本)。
 
 ```python
+import os
+os.environ["DF_API_KEY"] = "sk-xxxx"
 from dataflow.utils.storage import FileStorage
 from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
 
 # 引入原子算子
 from dataflow.operators.core_text import MCTSTreeRefiner
 from dataflow.operators.core_vision import VisualReasoningGenerator
+from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 
 class VisionMCTSReasoningPipeline:
     def __init__(
         self,
-        model_path: str,
-        *,
-        # Storage
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
         first_entry_file: str,
         cache_path: str = "../cache/cache_mcts",
         file_name_prefix: str = "mcts_reason",
@@ -224,8 +179,7 @@ class VisionMCTSReasoningPipeline:
         input_image_key: str = "image",
         input_tree_key: str = "tree",
         output_key: str = "final_reasoning_chains",
-        # VLLM
-        vllm_max_tokens: int = 1024
+
     ):
         self.storage = FileStorage(
             first_entry_file_name=first_entry_file,
@@ -234,13 +188,13 @@ class VisionMCTSReasoningPipeline:
             cache_type="jsonl"
         )
         
-        self.serving = LocalModelVLMServing_vllm(
-            hf_cache_dir=hf_cache_dir,
-            hf_local_dir=download_dir,
-            hf_model_name_or_path=model_path,
-            vllm_tensor_parallel_size=1,
-            vllm_temperature=0.7,
-            vllm_max_tokens=vllm_max_tokens
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="[https://dashscope.aliyuncs.com/compatible-mode/v1](https://dashscope.aliyuncs.com/compatible-mode/v1)", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
         )
         
         self.keys = {
@@ -260,7 +214,7 @@ class VisionMCTSReasoningPipeline:
         
         # 2. Generator: VLM -> Chains (Fallback)
         self.op_vlm_gen = VisualReasoningGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_type=prompt_type
         )
 
@@ -286,11 +240,8 @@ class VisionMCTSReasoningPipeline:
         
 if __name__ == "__main__":
     pipe = VisionMCTSReasoningPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
         first_entry_file="../example_data/capsbench_images/visual_mct_reasoning_demo.jsonl",
         prompt_type="spatial",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
     )
     pipe.forward()
 

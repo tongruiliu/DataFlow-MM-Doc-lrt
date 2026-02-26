@@ -1,134 +1,116 @@
 ---
-title: Image Grounded CoT (GCoT) Pipeline
+title: 图像定位思维链 (GCoT) 生成流水线（API版）
 icon: mdi:image-text
 createTime: 2026/01/11 20:44:55
-permalink: /en/mm_guide/image_gcot/
+permalink: /zh/mm_guide/image_gcot_api/
 ---
-## 1. Overview
+## 1. 概述
 
-The **Image Grounded Chain-of-Thought (GCoT) Pipeline** is designed to automatically generate **Grounded Chain-of-Thought** data. This pipeline generates multi-step reasoning to answer a question and simultaneously spatially locates (via Bounding Boxes) the key objects mentioned during the reasoning process. This significantly enhances the interpretability and precision of multimodal data.
+**图像定位思维链 (GCoT) 生成流水线** 旨在自动化生成**带视觉定位的思维链（Grounded Chain-of-Thought）**数据。该流水线通过多步推理，不仅生成回答问题的逻辑步骤，还将推理过程中提到的关键物体在图像中进行空间定位（Bounding Box），从而显著提升多模态数据的可解释性和精确度。
 
-Unlike traditional methods, this pipeline uses a **Single VLM (e.g., Qwen2.5-VL)** to handle both "Reasoning" and "Grounding" tasks, making the process streamlined and efficient.
+与传统方法不同，本流水线采用 **单一 VLM（如 GPT-5）** 同时完成“推理”和“定位”任务，流程更加精简高效。
 
-We support the following application scenarios:
+我们支持以下应用场景：
 
-* **Enhanced Multimodal Data Construction**: Adding interpretability and grounding annotations to VQA datasets.
-* **Complex Scene Understanding**: Generating detailed reasoning steps containing object coordinates.
-* **Model Reasoning Training**: Building data to train models to be "grounded" and reduce hallucinations.
+* **增强型多模态数据构建**：为 VQA 数据集增加解释性和定位标注。
+* **复杂场景理解**：生成包含物体坐标的详细推理步骤。
+* **模型推理能力训练**：构建数据以训练模型“言之有物”，减少幻觉。
 
-The main process of the pipeline includes:
+流水线的主要流程包括：
 
-1. **CoT Generation**: The model generates step-by-step reasoning text and extracts key nouns.
-2. **Keyword Parsing**: Cleaning and extracting keywords to be grounded from the generated text.
-3. **Visual Grounding**: The model generates bounding boxes (BBoxes) for the extracted keywords.
-4. **Information Injection**: Injecting BBox coordinates back into the reasoning text to form the final GCoT.
+1. **CoT 生成**：模型生成分步推理文本，并提取关键名词。
+2. **关键词解析**：从生成的文本中清洗并提取待定位的关键词。
+3. **视觉定位 (Grounding)**：模型针对提取的关键词生成边界框 (BBox)。
+4. **信息注入**：将 BBox 坐标回填至推理文本中，形成最终的 GCoT。
 
 ---
 
-## 2. Quick Start
+## 2. 快速开始
 
-### Step 1: Create a New DataFlow Working Directory
-
+### 第一步：创建新的 DataFlow 工作文件夹
 ```bash
 mkdir run_dataflow
 cd run_dataflow
-
 ```
 
-### Step 2: Initialize DataFlow-MM
-
+### 第二步：初始化 DataFlow-MM
 ```bash
 dataflowmm init
-
 ```
-
-You will then see:
-
+这时你会看到：
 ```bash
 gpu_pipelines/image_gcot_pipeline.py
 ```
 
-### Step 3: Download Sample Data
-
+### 第三步：下载示例数据
 ```bash
 huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
 ```
 
-### Step 4: Configure Parameters
+### 第四步：配置 API Key
+
+在 `api_pipelines/image_gcot_api_pipeline.py` 中设置 API Key 环境变量：
+
 ```python
-if __name__ == "__main__":
+import os
+os.environ["DF_API_KEY"] = "your_api_key"
+```
+
+### 第五步：配置参数
+
+在 `api_pipelines/image_gcot_api_pipeline.py` 中配置 API 服务和输入数据路径：
+
+```python
+    def __init__(
+        self,
+        *,
+        first_entry_file: str,
+        cache_path: str = "../cache/cache_gcot",
+        file_name_prefix: str = "gcot",
+        question_key: str = "question",
+        answer_key: str = "answer",
+        image_key: str = "image",
+        output_key: str = "gcot",
+        vllm_max_tokens: int = 512
+    ):
+```
+
+```python
     pipe = ImageGCoTPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl"
     )
-    pipe.forward()
 ```
-> **�7²2„1‚5 Important Note on Model Path Configuration (Taking `Qwen2.5-VL-3B-Instruct` as an example):**
-> 
-> * **If you have already downloaded the model files:** Please change `model_path` to your local model path. **Crucially**, ensure that the model folder is named exactly `Qwen2.5-VL-3B-Instruct`; otherwise, the framework will fail to recognize it.
-> * **If you haven't downloaded the model yet:** You must specify a `download_dir` parameter that ends with `Qwen2.5-VL-3B-Instruct` (as shown in the default parameters). Failure to do so will also result in the model not being recognized after downloading.
 
+```python
+self.vlm_serving = APIVLMServing_openai(
+            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
+        )
+```
 
-### Step 5: Run
-
+### 第六步：一键运行
 ```bash
-cd gpu_pipelines
-python image_gcot_pipeline.py
+cd api_pipelines
+python image_gcot_api_pipeline.py
 ```
-> **•0•0„1‚5 Troubleshooting**
-> 
-> **Issue 1:** If you encounter a CUDA library conflict error similar to the following:
-> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
-> 
-> **Solution:** This is usually caused by conflicting environment variables. Run the script with an empty `LD_LIBRARY_PATH`:
-> ```bash
-> LD_LIBRARY_PATH="" python image_gcot_pipeline.py
-> ```
-> 
-> **Issue 2:** If you are using **Qwen series models** and encounter the following error:
-> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
-> 
-> **Solution:** Open the `config.json` file located in your model folder, find the `rope_scaling` section, and change the key `"type"` to `"rope_type"`.
-> 
-> **Before modification:**
-> ```json
-> "rope_scaling": {
->   "type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> ```
-> 
-> **After modification:**
-> ```json
-> "rope_scaling": {
->   "rope_type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> ```
 
 ---
 
-## 3. Data Flow & Logic
+## 3. 数据流与流水线逻辑
 
-### 1. **Input Data**
+### 1. **输入数据**
 
-The input data for this process typically consists of standard VQA data:
+该流程的输入数据通常是标准的 VQA 数据：
 
-* **image**: Path to the image file.
-* **question**: Question about the image.
-* **answer**: Standard answer to the question (used to assist CoT generation).
+* **image**：图像文件路径。
+* **question**：关于图像的问题。
+* **answer**：问题的标准答案（用于辅助生成 CoT）。
 
-**Input Data Example**:
+**输入数据示例**：
 
 ```json
 {
@@ -139,45 +121,45 @@ The input data for this process typically consists of standard VQA data:
 
 ```
 
-### 2. **Core Operator Logic**
+### 2. **核心算子逻辑**
 
-This pipeline combines multiple fine-grained operators to achieve complex GCoT generation logic:
+本流水线通过组合多个细粒度算子来实现复杂的 GCoT 生成逻辑：
 
-#### A. **CoT Generation (PromptTemplatedVQAGenerator)**
+#### A. **CoT 生成 (PromptTemplatedVQAGenerator)**
 
-Uses a predefined `GCOT_PROMPT_TEMPLATE` to guide the model to generate "Step-by-step Reasoning" and a "Keyword List".
+利用预设的 `GCOT_PROMPT_TEMPLATE`，引导模型生成“步骤化推理”和“关键词列表”。
 
-* **Prompt Strategy**: Asks the model to output in the format `Step 1: ...`, `Step 2: ...`, `Keywords: ...`.
-* **Output**: Raw string containing reasoning text and keywords.
+* **Prompt 策略**：要求模型按 `Step 1: ...`, `Step 2: ...`, `Keywords: ...` 格式输出。
+* **输出**：包含推理文本和关键词的原始字符串。
 
-#### B. **Text Cleaning & Extraction (FunctionalRefiner)**
+#### B. **文本清洗与提取 (FunctionalRefiner)**
 
-Uses custom functions to parse the output from the previous step:
+使用自定义函数对上一步的输出进行解析：
 
-* `extract_clean_cot_logic`: Strips the keyword section, keeping pure CoT text.
-* `extract_keywords_logic`: Parses the content after `Keywords:` to generate a Python List.
+* `extract_clean_cot_logic`：剥离关键词部分，保留纯净的 CoT 文本。
+* `extract_keywords_logic`：解析 `Keywords:` 后的内容，生成 Python List。
 
-#### C. **Visual Grounding (VLMBBoxGenerator)**
+#### C. **视觉定位 (VLMBBoxGenerator)**
 
-Calls the VLM's grounding capability to generate bounding boxes for each extracted keyword.
+针对提取出的每一个关键词，调用 VLM 的定位能力生成边界框。
 
-* **Input**: Image + List of Keywords.
-* **Output**: Dictionary mapping keywords to bounding box coordinates.
+* **输入**：图像 + 关键词列表。
+* **输出**：关键词到边界框坐标的映射字典 (Map)。
 
-#### D. **Coordinate Injection (FunctionalRefiner)**
+#### D. **坐标注入 (FunctionalRefiner)**
 
-Uses the `inject_bboxes_logic` function to intelligently insert the generated BBox coordinates back into the original CoT text after the corresponding words.
+使用 `inject_bboxes_logic` 函数，将生成的 BBox 坐标智能插入回原始 CoT 文本中对应的单词之后。
 
-### 3. **Output Data**
+### 3. **输出数据**
 
-Finally, the output data generated by the pipeline will contain the following key fields:
+最终，流水线生成的输出数据将包含以下关键字段：
 
-* **raw_cot_output**: Raw text generated by the model.
-* **cleaned_cot**: Cleaned reasoning text.
-* **bbox_mapping**: Mapping of keywords to their coordinates.
-* **gcot**: Final result, reasoning chain containing coordinate information.
+* **raw_cot_output**：模型原始生成的文本。
+* **cleaned_cot**：清洗后的纯推理文本。
+* **bbox_mapping**：关键词与其坐标的映射。
+* **gcot**：最终结果，包含坐标信息的推理链。
 
-**Output Data Example (gcot field)**:
+**输出数据示例 (gcot 字段)**：
 
 ```text
 Step 1: Analyze the text visible in the image, which includes a list of actors beneath the title of the movie \"Nightmare Alley.\"\n\nStep 2: Identify the names listed. The first name listed is \"Bradley Cooper,\" indicating he is prominent in the film.\n\nStep 3: Recognize that the image is a promotional poster for \"Nightmare Alley,\" suggesting the individuals mentioned are likely key cast members.\n\nStep 4: Confirm that Bradley Cooper is identified as the lead actor based on his position at the top of the cast list.\n\nAnswer: Bradley Cooper.  \nKeywords: Nightmare Alley, cast list, poster.","cleaned_cot":"Step 1: Analyze the text visible in the image, which includes a list of actors beneath the title of the movie \"Nightmare Alley.\"\n\nStep 2: Identify the names listed. The first name listed is \"Bradley Cooper,\" indicating he is prominent in the film.\n\nStep 3: Recognize that the image is a promotional poster for \"Nightmare Alley,\" suggesting the individuals mentioned are likely key cast members.\n\nStep 4: Confirm that Bradley Cooper is identified as the lead actor based on his position at the top of the cast list.\n\nAnswer: Bradley Cooper.","extracted_keywords":["Nightmare Alley","cast list","poster"],"bbox_mapping":{},"gcot":"Step 1: Analyze the text visible in the image, which includes a list of actors beneath the title of the movie \"Nightmare Alley.\"\n\nStep 2: Identify the names listed. The first name listed is \"Bradley Cooper,\" indicating he is prominent in the film.\n\nStep 3: Recognize that the image is a promotional poster for \"Nightmare Alley,\" suggesting the individuals mentioned are likely key cast members.\n\nStep 4: Confirm that Bradley Cooper is identified as the lead actor based on his position at the top of the cast list.\n\nAnswer: Bradley Cooper.
@@ -186,11 +168,14 @@ Step 1: Analyze the text visible in the image, which includes a list of actors b
 
 ---
 
-## 4. Pipeline Example
+## 4. 流水线示例
 
-Below is the complete `ImageGCoTPipeline` code implementation.
+以下是完整的 `ImageGCoTAPIPipeline` 代码实现。
 
 ```python
+import os
+os.environ["DF_API_KEY"] = "sk-xxxx"
+
 import re
 from typing import List, Dict, Any
 import argparse
@@ -202,7 +187,7 @@ from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
 from dataflow.operators.core_vision import PromptTemplatedVQAGenerator, VLMBBoxGenerator
 from dataflow.operators.core_text import FunctionalRefiner
 from dataflow.prompts.prompt_template import NamedPlaceholderPromptTemplate
-
+from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 GCOT_PROMPT_TEMPLATE = (
     "Question: {question}\n"
     "Answer: {answer}\n\n"
@@ -295,10 +280,7 @@ def inject_bboxes_logic(cot_text: str, bbox_map: Dict[str, List[str]]) -> str:
 class ImageGCoTPipeline:
     def __init__(
         self,
-        model_path: str,
         *,
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
         first_entry_file: str,
         cache_path: str = "../cache/cache_gcot",
         file_name_prefix: str = "gcot",
@@ -316,15 +298,14 @@ class ImageGCoTPipeline:
             file_name_prefix=file_name_prefix,
             cache_type="jsonl"
         )
-        
-        # [单一模型 Serving]
-        self.vlm_serving = LocalModelVLMServing_vllm(
-            hf_model_name_or_path=model_path,
-            hf_cache_dir=hf_cache_dir,
-            hf_local_dir=download_dir,
-            vllm_tensor_parallel_size=1,
-            vllm_temperature=0.7,
-            vllm_max_tokens=vllm_max_tokens
+
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
         )
         
         self.keys = {
@@ -405,10 +386,7 @@ class ImageGCoTPipeline:
 
 if __name__ == "__main__":
     pipe = ImageGCoTPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        first_entry_file="../example_data/capsbench_images/image_gcot_demo.jsonl"
     )
     pipe.forward()
 ```

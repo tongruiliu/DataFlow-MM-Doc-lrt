@@ -4,27 +4,26 @@ createTime: 2026/01/11 22:13:45
 icon: mdi:image-text
 permalink: /en/mm_guide/image_visual_only_mcq_pipeline/
 ---
+
 ## 1. Overview
 
-The **Visual-Only MCQ Pipeline** is a core component of the CapRL (Caption Reinforcement Learning) framework. Its goal is to generate a set of high-quality Multiple Choice Questions (MCQs) that satisfy **strict visual dependency**: the model must "see" the image to answer correctly; answering based on text alone (guessing or common sense) is not possible.
+The **Visual-Only MCQ Pipeline** is a core component within the CapRL (Caption Reinforcement Learning) framework. Its goal is to generate a set of high-quality Multiple-Choice Questions (MCQs) that strictly satisfy **strong visual dependency**: the model must "see" the image to answer correctly, and cannot rely merely on text guessing or common sense.
 
-This pipeline uses a **Generate-Parse-Verify** three-step method, leveraging **Option Rotation** and **Blind Tests** to rigorously filter out hallucinations or overly simple questions. The generated questions serve as a robust reward signal for Reinforcement Learning.
+This pipeline utilizes a **"Generate-Parse-Verify"** three-step approach, employing **Option Rotation** and **Blind Test (Text-Only)** mechanisms to rigorously filter out model hallucinations or overly simple questions. The generated questions can be used as reward signals (Reward Model) for reinforcement learning.
 
 The main process includes:
 
-1. **MCQ Generation**: VLM generates raw QA pairs based on the image.
-2. **Structured Parsing**: Using regex logic to parse text into standard question/option structures.
+1. **MCQ Generation**: The VLM generates raw Question-Answer text blocks based on the image.
+2. **Structured Parsing**: Uses regex logic to parse the raw text into standard question and option structures.
 3. **Visual Dependency Verification**:
-* **Rotation Test**: Shuffling options multiple times to eliminate positional bias.
-* **Dual Filtering**: Requiring high "Visual Accuracy" and low "Text-only Accuracy".
-
-
+   * **Rotation Test**: Randomly shuffles the order of options multiple times to eliminate positional bias.
+   * **Dual Filtering**: Requires a high "Visual Accuracy" (with image) and a low "Textual Accuracy" (without image).
 
 ---
 
 ## 2. Quick Start
 
-### Step 1: Create Working Directory
+### Step 1: Create a New DataFlow Working Directory
 
 ```bash
 mkdir run_vis_mcq
@@ -32,28 +31,101 @@ cd run_vis_mcq
 
 ```
 
-### Step 2: Prepare Script
-
-Save the code in the "Pipeline Example" section below as `visual_mcq_pipeline.py`.
-
-### Step 3: Download Example Data
+### Step 2: Initialize DataFlow-MM
 
 ```bash
-huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir example_data
+dataflowmm init
 
 ```
 
-### Step 4: Run
+You will then see:
 
 ```bash
-python visual_mcq_pipeline.py \
-  --model_path "/path/to/Qwen2.5-VL-3B-Instruct" \
-  --input_file "data/captions.jsonl" \
-  --rotate_num 4 \
-  --pass_vis 1.0 \
-  --pass_txt 0.25
+gpu_pipelines/image_visual_only_mcq_pipeline.py
 
 ```
+
+### Step 3: Download Sample Data
+
+```bash
+huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
+
+```
+
+### Step 4: Configure Parameters
+
+Configure the model path and filtering thresholds (e.g., requiring 100% visual accuracy and less than 25% textual accuracy):
+
+```python
+if __name__ == "__main__":
+    pipe = VisualOnlyMCQPipeline(
+        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
+        first_entry_file="../example_data/capsbench_images/image_visual_only_mcq_demo.jsonl",
+        hf_cache_dir="~/.cache/huggingface",
+        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        rotate_num=4,
+        pass_visual_min=1.0,
+        pass_textual_max=0.25
+    )
+    pipe.forward()
+
+```
+
+> **⚠️ Important Note on Model Path Configuration (Taking `Qwen2.5-VL-3B-Instruct` as an example):**
+> * **If you have already downloaded the model files:** Please change `model_path` to your local model path. **Crucially**, ensure that the model folder is named exactly `Qwen2.5-VL-3B-Instruct`; otherwise, the framework will fail to recognize it.
+> * **If you haven't downloaded the model yet:** You must specify a `download_dir` parameter that ends with `Qwen2.5-VL-3B-Instruct` (as shown in the default parameters). Failure to do so will also result in the model not being recognized after downloading.
+> 
+> 
+
+### Step 5: Run
+
+```bash
+cd gpu_pipelines
+python image_visual_only_mcq_pipeline.py
+
+```
+
+> **🛠️ Troubleshooting**
+> **Issue 1:** If you encounter a CUDA library conflict error similar to the following:
+> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
+> **Solution:** This is usually caused by conflicting environment variables. Run the script with an empty `LD_LIBRARY_PATH`:
+> ```bash
+> LD_LIBRARY_PATH="" python image_visual_only_mcq_pipeline.py
+> 
+> ```
+> 
+> 
+> **Issue 2:** If you are using **Qwen series models** and encounter the following error:
+> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
+> **Solution:** Open the `config.json` file located in your model folder, find the `rope_scaling` section, and change the key `"type"` to `"rope_type"`.
+> **Before modification:**
+> ```json
+> "rope_scaling": {
+>   "type": "mrope",
+>   "mrope_section": [
+>     16,
+>     24,
+>     24
+>   ]
+> }
+> 
+> ```
+> 
+> 
+> **After modification:**
+> ```json
+> "rope_scaling": {
+>   "rope_type": "mrope",
+>   "mrope_section": [
+>     16,
+>     24,
+>     24
+>   ]
+> }
+> 
+> ```
+> 
+> 
 
 ---
 
@@ -61,7 +133,7 @@ python visual_mcq_pipeline.py \
 
 ### 1. **Input Data**
 
-Input only requires the image path:
+The input data only requires the image path:
 
 * **image**: Path to the image file.
 
@@ -76,35 +148,35 @@ Input only requires the image path:
 
 ### 2. **Core Operator Logic**
 
-This pipeline chains three key operators:
+This pipeline is chained together by three key operators:
 
-#### A. **FixPromptedVQAGenerator (Raw Generation)**
+#### A. **Raw Generation (FixPromptedVQAGenerator)**
 
-* **Function**: Uses CapRL predefined Prompt templates (`SYS_PROMPT_MCQ` / `USER_PROMPT_MCQ`) to generate 5 MCQs at once.
-* **Output**: Unstructured text block containing multiple `#### Question` and options.
+* **Function**: Uses the preset CapRL prompt templates (`SYS_PROMPT_MCQ` / `USER_PROMPT_MCQ`) to instruct the VLM to generate 5 MCQs in one go.
+* **Output**: Unstructured text blocks containing multiple `#### Question` headers and options.
 
-#### B. **FunctionalRefiner (Regex Parsing)**
+#### B. **Structured Parsing (FunctionalRefiner)**
 
 * **Logic Function**: `parse_mcq_text_logic`
-* **Function**: Extracts questions, options (A-F), and correct answers from raw text using regex.
-* **Output**: Structured MCQ list (`parsed_mcq_list`).
+* **Function**: Extracts the questions, options (A-F), and correct answers from the raw text using regular expressions.
+* **Output**: A structured list of MCQs (`parsed_mcq_list`).
 
-#### C. **VisualDependencyRefiner (Dependency Verification)**
+#### C. **Dependency Verification (VisualDependencyRefiner)**
 
-This is the core filter. It performs N inferences (N = `rotate_num`) for each question:
+This is the core filter of the pipeline. It performs N inferences (N = `rotate_num`) for each question:
 
-1. **Option Rotation**: Randomly shuffles options (e.g., moving answer from A to C) to prevent the model from cheating by "always picking A".
-2. **Visual Pass**: Input Image + Question. Records the model's accuracy.
-3. **Textual Pass**: Input Question only (no image). Records the model's blind guessing accuracy.
+1. **Option Rotation**: Randomly shuffles the option order (e.g., moving the answer from A to C) to prevent the model from cheating by "always choosing A".
+2. **Visual Pass**: Inputs Image + Question. Records the proportion of correct answers.
+3. **Textual Pass (Blind Test)**: Inputs Question only (No Image). Records the proportion of correct blind guesses.
 4. **Filtering Criteria**:
-* Keep the question IF AND ONLY IF: `Visual_Acc >= pass_visual_min` **AND** `Textual_Acc <= pass_textual_max`.
-* *Example*: If a question can be answered correctly without the image (high text accuracy), it tests common sense rather than vision, so it is **discarded**.
+* Retains the question if and only if: `Visual_Acc >= pass_visual_min` **AND** `Textual_Acc <= pass_textual_max`.
+* *Example*: If a question can be answered correctly without looking at the image (high textual accuracy), it relies on common sense rather than visual info, and is **discarded**.
 
 
 
 ### 3. **Output Data**
 
-The output data (`final_mcqs`) contains only questions that passed rigorous verification. These questions possess high quality and visual relevance.
+The output data (`final_mcqs`) only contains questions that have passed the rigorous verification. These questions possess extremely high quality and visual relevance.
 
 **Output Data Example**:
 
@@ -116,8 +188,8 @@ The output data (`final_mcqs`) contains only questions that passed rigorous veri
             "question": "What is the color of the car on the far left?\n - A) Red\n - B) Blue...",
             "answer": "A",
             "stats": {
-                "visual_acc": 1.0,  # 4/4 correct with image
-                "text_acc": 0.0     # 0/4 correct without image
+                "visual_acc": 1.0,  
+                "text_acc": 0.0     
             }
         }
     ]
@@ -129,12 +201,10 @@ The output data (`final_mcqs`) contains only questions that passed rigorous veri
 
 ## 4. Pipeline Example
 
-Below is the complete `VisualOnlyMCQPipeline` code implementation.
+Below is the complete `VisualOnlyMCQPipeline` code implementation (GPU Version).
 
 ```python
 import argparse
-import re
-from typing import List, Dict, Any
 from dataflow.utils.storage import FileStorage
 from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
 
@@ -142,13 +212,14 @@ from dataflow.operators.core_vision import FixPromptedVQAGenerator, VisualDepend
 from dataflow.operators.core_text import FunctionalRefiner
 from dataflow.prompts.image import ImageCaprlPrompt
 
-# 正则解析逻辑
+import re
+from typing import List, Dict, Any
+
 _Q_BLOCK_SPLIT = re.compile(r"^####\s*\d+\.\s*\*\*(.*?)\*\*\s*$", re.M)
 _OPT_LINE_RE = re.compile(r"^\s*-\s*([A-F])\)\s*(.+?)\s*$")
 _ANS_LINE_RE = re.compile(r"^\s*\*\*Answer:\*\*\s*([A-F])\)\s*(.+?)\s*$", re.I)
 
 def parse_mcq_text_logic(mcq_text: str, expected: int = 5) -> List[Dict[str, Any]]:
-    """将 VLM 生成的原始文本解析为结构化字典列表"""
     if not mcq_text or not isinstance(mcq_text, str): return []
     
     indices = [m.start() for m in _Q_BLOCK_SPLIT.finditer(mcq_text)]
@@ -210,7 +281,9 @@ class VisualOnlyMCQPipeline:
         model_path: str,
         *,
         first_entry_file: str,
-        cache_path: str = "./cache_mcq",
+        hf_cache_dir: str | None = None,
+        download_dir: str = "./ckpt/models",
+        cache_path: str = "../cache/cache_mcq",
         file_name_prefix: str = "vis_mcq",
         # Config
         rotate_num: int = 4,
@@ -224,7 +297,6 @@ class VisualOnlyMCQPipeline:
         device: str = "cuda",
         vllm_max_tokens: int = 2048
     ):
-        # 1. 初始化存储
         self.storage = FileStorage(
             first_entry_file_name=first_entry_file,
             cache_path=cache_path,
@@ -232,15 +304,16 @@ class VisualOnlyMCQPipeline:
             cache_type="jsonl"
         )
         
-        # 2. 初始化 VLM 服务
         self.serving = LocalModelVLMServing_vllm(
+            hf_cache_dir=hf_cache_dir,
+            hf_local_dir=download_dir,
             hf_model_name_or_path=model_path,
             vllm_tensor_parallel_size=1,
-            vllm_temperature=0.1,  # 低温度以保证格式稳定
+            vllm_temperature=0.1, 
             vllm_max_tokens=vllm_max_tokens
         )
         
-        # Keys 配置
+        # Keys
         self.keys = {
             "img": input_image_key,
             "raw_text": "raw_mcq_text",
@@ -248,23 +321,24 @@ class VisualOnlyMCQPipeline:
             "final": output_key
         }
         
-        # 加载 Prompt 库
+        # --- Prompts ---
         self.prompts_db = ImageCaprlPrompt().build_prompt()
 
-        # ================== 算子初始化 ==================
+        # ================== Operators ==================
         
-        # 算子 1: 生成原始 MCQ 文本
+        # 1. Generate Raw MCQs (FixPromptedVQAGenerator)
+        # 直接使用 prompt 类中的字符串
         self.op_gen_raw = FixPromptedVQAGenerator(
             serving=self.serving,
             system_prompt=self.prompts_db["SYS_PROMPT_MCQ"],
             user_prompt=self.prompts_db["USER_PROMPT_MCQ"]
         )
         
-        # 算子 2: 解析文本为结构化数据
+        # 2. Parse MCQs (Refine)
         self.op_parse = FunctionalRefiner(func=parse_mcq_text_logic)
         
-        # 算子 3: 视觉依赖性验证 (核心过滤)
-        # 包含旋转 (Rotation) 和 无图检测 (Text-only check)
+        # 3. Verify Visual Dependency (Refine)
+        # 传入 prompt 模板
         self.op_verify = VisualDependencyRefiner(
             serving=self.serving,
             instruction_template=self.prompts_db["ANSWER_INSTRUCTION"],
@@ -301,21 +375,14 @@ class VisualOnlyMCQPipeline:
         print(f">>> [Pipeline] Done. Results in: {self.keys['final']}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_file", default="./dataflow/example/image_to_text_pipeline/capsbench_captions.jsonl")
-    parser.add_argument("--model_path", default="Qwen/Qwen2.5-VL-3B-Instruct")
-    parser.add_argument("--rotate_num", type=int, default=4)
-    parser.add_argument("--pass_vis", type=float, default=1.0)
-    parser.add_argument("--pass_txt", type=float, default=0.25)
-    
-    args = parser.parse_args()
-    
     pipe = VisualOnlyMCQPipeline(
-        model_path=args.model_path,
-        first_entry_file=args.input_file,
-        rotate_num=args.rotate_num,
-        pass_visual_min=args.pass_vis,
-        pass_textual_max=args.pass_txt
+        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
+        first_entry_file="../example_data/capsbench_images/image_visual_only_mcq_demo.jsonl",
+        hf_cache_dir="~/.cache/huggingface",
+        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        rotate_num=4,
+        pass_visual_min=1.0,
+        pass_textual_max=0.25
     )
     pipe.forward()
 

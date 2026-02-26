@@ -29,37 +29,111 @@ permalink: /zh/mm_guide/image_scale_caption_pipeline/
 
 ## 2. 快速开始
 
-### 第一步：准备工作目录
+### 第一步：创建新的 DataFlow 工作文件夹
 
 ```bash
-mkdir run_scalecap
-cd run_scalecap
+mkdir run_dataflow
+cd run_dataflow
 
 ```
 
-### 第二步：准备脚本
-
-将下文“流水线示例”中的代码保存为 `scalecap_pipeline.py`。
-
-### 第三步：配置运行参数
-
-确保 VLM 模型（如 Qwen2.5-VL）路径正确。
+### 第二步：初始化 DataFlow-MM
 
 ```bash
-# 安装依赖
-pip install open-dataflow vllm
+dataflowmm init
 
 ```
 
-### 第四步：一键运行
+这时你会看到：
 
 ```bash
-python scalecap_pipeline.py \
-  --model_path "/path/to/Qwen2.5-VL-3B-Instruct" \
-  --input_jsonl "data/images.jsonl" \
-  --output_key "final_caption"
+gpu_pipelines/image_scale_caption_pipeline.py
 
 ```
+
+### 第三步：下载示例数据
+
+```bash
+huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
+
+```
+
+### 第四步：配置参数
+
+```python
+if __name__ == "__main__":
+    pipe = ImageScaleCaptionPipeline(
+        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
+        hf_cache_dir="~/.cache/huggingface",
+        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        device="cuda",
+        first_entry_file="../example_data/capsbench_images/image_scale_caption_demo.jsonl",
+        cache_path="../cache/image_scale_caption",
+        file_name_prefix="scalecap",
+        input_image_key="image",
+        output_key="final_caption",
+        vllm_tensor_parallel_size=1,
+        vllm_max_tokens=1024
+    )
+    pipe.forward()
+
+```
+
+> **⚠️ 模型路径配置的重要提示（以 `Qwen2.5-VL-3B-Instruct` 为例）：**
+> * **如果您已经下载好了模型文件**：请将 `model_path` 修改为您的本地模型路径。**务必保证**模型存放的最终文件夹名称精确为 `Qwen2.5-VL-3B-Instruct`，否则底层解析时将无法正确匹配和识别该模型。
+> * **如果您还未下载模型（需要自动下载）**：请一定要指定 `download_dir` 参数，并且该目录路径**必须以** `Qwen2.5-VL-3B-Instruct` **结尾**（正如默认参数所示），否则下载完成后同样会导致框架无法识别模型。
+> 
+> 
+
+### 第五步：一键运行
+
+```bash
+cd gpu_pipelines
+python image_scale_caption_pipeline.py
+
+```
+
+> **🛠️ 常见问题排查 (Troubleshooting)**
+> **问题 1：** 如果遇到类似如下的动态链接库冲突报错：
+> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
+> **解决方法：** 这通常是环境变量干扰导致的。请在运行命令前清空 `LD_LIBRARY_PATH`：
+> ```bash
+> LD_LIBRARY_PATH="" python image_scale_caption_pipeline.py
+> 
+> ```
+> 
+> 
+> **问题 2：** 如果您使用的是 **Qwen 系列模型**，并且遇到以下报错：
+> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
+> **解决方法：** 打开模型文件夹下的 `config.json` 文件，找到 `rope_scaling` 配置块，将 `"type"` 字段修改为 `"rope_type"` 即可。
+> **修改前：**
+> ```json
+> "rope_scaling": {
+>   "type": "mrope",
+>   "mrope_section": [
+>     16,
+>     24,
+>     24
+>   ]
+> }
+> 
+> ```
+> 
+> 
+> **修改后：**
+> ```json
+> "rope_scaling": {
+>   "rope_type": "mrope",
+>   "mrope_section": [
+>     16,
+>     24,
+>     24
+>   ]
+> }
+> 
+> ```
+> 
+> 
 
 ---
 
@@ -75,7 +149,7 @@ python scalecap_pipeline.py \
 
 ```json
 {
-    "image": "./images/complex_scene.jpg"
+    "image": "../example_data/capsbench_images/0.png"
 }
 
 ```
@@ -132,12 +206,12 @@ python scalecap_pipeline.py \
 
 ```json
 {
-    "image": "./images/complex_scene.jpg",
+    "image": "../example_data/capsbench_images/0.png",
     "init_caption": "A dog sitting on a bench.",
     "golden_sentences": ["A dog is sitting on a wooden bench."],
-    "q_list": ["Describe more details about the dog.", "Describe position of the bench."],
+    "q_list": ["Describe more details about the dog.", "Describe more details about the position of the bench."],
     "final_details": ["The dog is a Golden Retriever with a red collar.", "The bench is located in a park."],
-    "final_caption": "A Golden Retriever with a red collar is sitting on a wooden bench located in a park..."
+    "final_caption": "A Golden Retriever with a red collar is sitting on a wooden bench located in a park."
 }
 
 ```
@@ -146,7 +220,7 @@ python scalecap_pipeline.py \
 
 ## 4. 流水线示例
 
-以下是完整的 `ImageScaleCaptionPipeline` 代码实现。
+以下是完整的 `ImageScaleCaptionPipeline` 代码实现 (GPU 版本)。
 
 ```python
 import re
@@ -154,11 +228,78 @@ import argparse
 from typing import Callable, Any, List
 
 from dataflow.utils.storage import FileStorage
+
 from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
+
 from dataflow.prompts.prompt_template import NamedPlaceholderPromptTemplate
 from dataflow.prompts.image import ImageScaleCaptionPrompt
+
 from dataflow.operators.core_vision import PromptedVQAGenerator, BatchVQAGenerator, VisualGroundingRefiner
 from dataflow.operators.core_text import PromptTemplatedQAGenerator, FunctionalRefiner
+
+
+def split_sentences(text: str) -> List[str]:
+    """将文本拆分为句子列表"""
+    if not text or not isinstance(text, str):
+        return []
+    # 使用正则按标点符号分割 (. ! ? 。 ！ ？)
+    _SENT_SPLIT = re.compile(r"(?<=[.!?。！？])\s+")
+    parts = [p.strip() for p in _SENT_SPLIT.split(text) if p.strip()]
+    return parts or ([text.strip()] if text.strip() else [])
+
+def join_list(data: Any, separator: str = "\n") -> str:
+    """将列表连接为字符串"""
+    if isinstance(data, list):
+        # 过滤掉非字符串元素或空字符串
+        valid_items = [str(x) for x in data if x]
+        return separator.join(valid_items)
+    return str(data) if data is not None else ""
+
+def parse_questions_logic(text: str, max_q: int = 20) -> List[str]:
+    """
+    解析 LLM 生成的 "Describe more details about..." 文本，
+    并自动扩展 position 问题。
+    """
+    if not text or not isinstance(text, str):
+        return []
+
+    lines = [t.strip() for t in text.split("\n") if t.strip()]
+    obj_qs = []
+    
+    for line in lines:
+        # 提取包含 "Describe more details about" 的行
+        if "Describe more details about" in line:
+            # 去除可能的序号 (如 "1. Describe...")
+            try:
+                start_idx = line.find("Describe")
+                clean = line[start_idx:]
+                # 去除句末多余内容，保留到第一个句号
+                if "." in clean:
+                    clean = clean.split(".")[0] + "."
+                obj_qs.append(clean)
+            except Exception:
+                continue
+    
+    # 去重并保持顺序
+    seen = set()
+    unique_obj_qs = []
+    for q in obj_qs:
+        if q not in seen:
+            unique_obj_qs.append(q)
+            seen.add(q)
+    
+    # 截断
+    unique_obj_qs = unique_obj_qs[:max_q]
+    
+    # 扩展 Position 问题
+    pos_qs = [
+        q.replace("Describe more details about", "Describe more details about the position of")
+        for q in unique_obj_qs
+    ]
+    
+    # 返回合并后的列表 (对象问题 + 位置问题)
+    return unique_obj_qs + pos_qs
+
 
 class ImageScaleCaptionPipeline:
     def __init__(
@@ -211,14 +352,19 @@ class ImageScaleCaptionPipeline:
         # ================== Operator Initialization ==================
 
         # --- Step A: Generate Init Caption ---
+        # 构造固定 Prompt 列
         self.refine_const_prompt = FunctionalRefiner(func=lambda: self.prompts_db["VLM_PROMPT_1"])
+        
+        # 生成初稿 (使用通用 PromptedVQAGenerator)
         self.gen_init_caption = PromptedVQAGenerator(
             serving=self.serving,
             system_prompt="You are a helpful assistant."
         )
 
         # --- Step B: Refine Golden Sentences ---
+        # 分句
         self.refine_split = FunctionalRefiner(func=split_sentences)
+        
         # 视觉自检 (保留 Yes 的句子)
         self.refine_golden = VisualGroundingRefiner(
             serving=self.serving,
@@ -226,7 +372,10 @@ class ImageScaleCaptionPipeline:
         )
 
         # --- Step C: Generate Questions ---
+        # 列表转字符串
         self.refine_join = FunctionalRefiner(func=join_list)
+        
+        # 文本生成问题 (Text-to-Text)
         tpl_q = NamedPlaceholderPromptTemplate(
             template=self.prompts_db["LLM_PROMPT_1"], 
             join_list_with="\n"
@@ -235,16 +384,22 @@ class ImageScaleCaptionPipeline:
             serving=self.serving,
             prompt_template=tpl_q
         )
+        
+        # 解析问题文本为列表
         self.refine_parse_qs = FunctionalRefiner(func=parse_questions_logic)
 
         # --- Step D: Generate Answers ---
+        # 批量回答 (One Image -> Many Qs)
         self.gen_answers = BatchVQAGenerator(serving=self.serving)
+        
+        # 回答过滤
         self.refine_answers = VisualGroundingRefiner(
             serving=self.serving,
             prompt_template="Given the image, is the statement '{text}' grounded in the image and not generic? Answer strictly yes or no."
         )
 
         # --- Step E: Integrate Final Caption ---
+        # 融合 (Text-to-Text)
         tpl_final = NamedPlaceholderPromptTemplate(
             template=self.prompts_db["LLM_PROMPT_4"], 
             join_list_with="\n"
@@ -256,6 +411,7 @@ class ImageScaleCaptionPipeline:
 
     def forward(self):
         print(">>> [Pipeline] Step 0: Preparing Prompts...")
+        # 构造 init_prompt 列
         self.refine_const_prompt.run(
             self.storage.step(), 
             output_key="init_prompt"
@@ -288,11 +444,14 @@ class ImageScaleCaptionPipeline:
             output_key="golden_str", 
             data="golden_sentences"
         )
+        
+        # template: "{sentence}" -> map to col "golden_str"
         self.gen_questions_text.run(
             self.storage.step(), 
             output_answer_key="raw_q_text", 
             sentence="golden_str"
         )
+        
         self.refine_parse_qs.run(
             self.storage.step(), 
             output_key="q_list", 
@@ -306,6 +465,7 @@ class ImageScaleCaptionPipeline:
             input_image_key=self.input_image_key, 
             output_key="raw_answers"
         )
+        
         self.refine_answers.run(
             self.storage.step(), 
             input_list_key="raw_answers", 
@@ -319,48 +479,35 @@ class ImageScaleCaptionPipeline:
             output_key="details_str", 
             data="final_details"
         )
+        
+        # template keys: context, object_info, position_info
         self.gen_final_caption.run(
             self.storage.step(),
             output_answer_key=self.output_key,
             context="golden_str",
             object_info="details_str",
-            position_info="details_str"
+            position_info="details_str" # 简化：同时作为 object 和 position 信息
         )
 
         print(f">>> [Pipeline] All Done. Result saved to: {self.storage.cache_path}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="ScaleCap Dense Captioning Pipeline")
-    
-    parser.add_argument("--model_path", default="Qwen/Qwen2.5-VL-3B-Instruct")
-    parser.add_argument("--hf_cache_dir", default="~/.cache/huggingface")
-    parser.add_argument("--download_dir", default="./ckpt/models")
-    parser.add_argument("--device", default="cuda")
-
-    parser.add_argument("--input_jsonl", default="./dataflow/example/image_to_text_pipeline/capsbench_captions.jsonl")
-    parser.add_argument("--cache_path", default="./cache_scalecap_results")
-    parser.add_argument("--file_name_prefix", default="scalecap")
-    parser.add_argument("--input_image_key", default="image")
-    parser.add_argument("--output_key", default="final_caption")
-
-    parser.add_argument("--tp", type=int, default=1)
-    parser.add_argument("--max_tokens", type=int, default=1024)
-
-    args = parser.parse_args()
-
     pipe = ImageScaleCaptionPipeline(
-        model_path=args.model_path,
-        hf_cache_dir=args.hf_cache_dir,
-        download_dir=args.download_dir,
-        device=args.device,
-        first_entry_file=args.input_jsonl,
-        cache_path=args.cache_path,
-        file_name_prefix=args.file_name_prefix,
-        input_image_key=args.input_image_key,
-        output_key=args.output_key,
-        vllm_tensor_parallel_size=args.tp,
-        vllm_max_tokens=args.max_tokens
+        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
+        hf_cache_dir="~/.cache/huggingface",
+        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
+        device="cuda",
+        
+        first_entry_file="../example_data/capsbench_images/image_scale_caption_demo.jsonl",
+        cache_path="../cache/image_scale_caption",
+        file_name_prefix="scalecap",
+        
+        input_image_key="image",
+        output_key="final_caption",
+        
+        vllm_tensor_parallel_size=1,
+        vllm_max_tokens=1024
     )
     
     pipe.forward()

@@ -1,28 +1,29 @@
 ---
-title: 视觉依赖 MCQ 生成流水线
+title: Visual-Only MCQ Pipeline (API version)
 createTime: 2026/01/11 22:13:45
 icon: mdi:image-text
-permalink: /zh/mm_guide/image_visual_only_mcq_pipeline/
----
-## 1. 概述
-
-**视觉依赖 MCQ 生成流水线 (Visual-Only MCQ Pipeline)** 是 CapRL (Caption Reinforcement Learning) 框架中的核心组件。它的目标是生成一组高质量的多项选择题 (MCQ)，且这些题目必须满足**强视觉依赖性**：即模型必须“看”图才能答对，仅凭文本（猜题或常识）无法作答。
-
-该流水线通过**生成-解析-验证**三步法，利用**选项旋转 (Rotation)** 和**无图盲测 (Blind Test)** 机制，严格过滤掉模型幻觉或过于简单的题目。生成的题目可作为强化学习的奖励信号（Reward Model）。
-
-主要流程包括：
-
-1. **MCQ 生成**：VLM 基于图像生成原始的问答对文本。
-2. **结构化解析**：利用正则逻辑将文本解析为标准的题目与选项结构。
-3. **视觉依赖验证**：
-* **旋转测试**：多次打乱选项顺序，消除位置偏见。
-* **双重过滤**：要求“有图答对率”高，“无图答对率”低。
-
+permalink: /en/mm_guide/image_visual_only_mcq_pipeline_api/
 ---
 
-## 2. 快速开始
+## 1. Overview
 
-### 第一步：创建工作目录
+The **Visual-Only MCQ Pipeline** is a core component within the CapRL (Caption Reinforcement Learning) framework. Its goal is to generate a set of high-quality Multiple-Choice Questions (MCQs) that strictly satisfy **strong visual dependency**: the model must "see" the image to answer correctly, and cannot rely merely on text guessing or common sense.
+
+This pipeline utilizes a **"Generate-Parse-Verify"** three-step approach, employing **Option Rotation** and **Blind Test (Text-Only)** mechanisms to rigorously filter out model hallucinations or overly simple questions. The generated questions can be used as reward signals (Reward Model) for reinforcement learning.
+
+The main process includes:
+
+1. **MCQ Generation**: The VLM generates raw Question-Answer text blocks based on the image.
+2. **Structured Parsing**: Uses regex logic to parse the raw text into standard question and option structures.
+3. **Visual Dependency Verification**:
+   * **Rotation Test**: Randomly shuffles the order of options multiple times to eliminate positional bias.
+   * **Dual Filtering**: Requires a high "Visual Accuracy" (with image) and a low "Textual Accuracy" (without image).
+
+---
+
+## 2. Quick Start
+
+### Step 1: Create a New DataFlow Working Directory
 
 ```bash
 mkdir run_vis_mcq
@@ -30,113 +31,70 @@ cd run_vis_mcq
 
 ```
 
-### 第二步：初始化 DataFlow-MM
+### Step 2: Initialize DataFlow-MM
 
 ```bash
 dataflowmm init
 
 ```
 
-这时你会看到：
+You will then see:
 
 ```bash
-gpu_pipelines/image_visual_only_mcq_pipeline.py
+api_pipelines/image_visual_only_mcq_api_pipeline.py
 
 ```
 
-### 第三步：下载示例数据
+### Step 3: Download Sample Data
 
 ```bash
 huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
 
 ```
 
-### 第四步：配置参数
+### Step 4: Configure API Key
 
-配置模型路径和过滤阈值（例如，要求有图 100% 正确，无图正确率低于 25%）：
+Set your API Key environment variable in `api_pipelines/image_visual_only_mcq_api_pipeline.py`:
 
 ```python
-if __name__ == "__main__":
+import os
+os.environ["DF_API_KEY"] = "your_api_key"
+
+```
+
+### Step 5: Configure Parameters
+
+Configure the API service and run parameters in `api_pipelines/image_visual_only_mcq_api_pipeline.py` (e.g., requiring 100% visual accuracy and less than 25% textual accuracy):
+
+```python
     pipe = VisualOnlyMCQPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
         first_entry_file="../example_data/capsbench_images/image_visual_only_mcq_demo.jsonl",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
         rotate_num=4,
         pass_visual_min=1.0,
         pass_textual_max=0.25
     )
-    pipe.forward()
 
 ```
 
-> **⚠️ 模型路径配置的重要提示（以 `Qwen2.5-VL-3B-Instruct` 为例）：**
-> * **如果您已经下载好了模型文件**：请将 `model_path` 修改为您的本地模型路径。**务必保证**模型存放的最终文件夹名称精确为 `Qwen2.5-VL-3B-Instruct`，否则底层解析时将无法正确匹配和识别该模型。
-> * **如果您还未下载模型（需要自动下载）**：请一定要指定 `download_dir` 参数，并且该目录路径**必须以** `Qwen2.5-VL-3B-Instruct` **结尾**（正如默认参数所示），否则下载完成后同样会导致框架无法识别模型。
-> 
-> 
-
-### 第五步：一键运行
+### Step 6: Run with One Command
 
 ```bash
-cd gpu_pipelines
-python image_visual_only_mcq_pipeline.py
+cd api_pipelines
+python image_visual_only_mcq_api_pipeline.py
 
 ```
-
-> **🛠️ 常见问题排查 (Troubleshooting)**
-> **问题 1：** 如果遇到类似如下的动态链接库冲突报错：
-> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
-> **解决方法：** 这通常是环境变量干扰导致的。请在运行命令前清空 `LD_LIBRARY_PATH`：
-> ```bash
-> LD_LIBRARY_PATH="" python image_visual_only_mcq_pipeline.py
-> 
-> ```
-> 
-> 
-> **问题 2：** 如果您使用的是 **Qwen 系列模型**，并且遇到以下报错：
-> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
-> **解决方法：** 打开模型文件夹下的 `config.json` 文件，找到 `rope_scaling` 配置块，将 `"type"` 字段修改为 `"rope_type"` 即可。
-> **修改前：**
-> ```json
-> "rope_scaling": {
->   "type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
-> **修改后：**
-> ```json
-> "rope_scaling": {
->   "rope_type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
 
 ---
 
-## 3. 数据流与流水线逻辑
+## 3. Data Flow & Logic
 
-### 1. **输入数据**
+### 1. **Input Data**
 
-输入仅需包含图像路径：
+The input data only requires the image path:
 
-* **image**：图像文件路径。
+* **image**: Path to the image file.
 
-**输入数据示例**：
+**Input Data Example**:
 
 ```json
 {
@@ -145,38 +103,39 @@ python image_visual_only_mcq_pipeline.py
 
 ```
 
-### 2. **核心算子逻辑**
+### 2. **Core Operator Logic**
 
-该流水线由三个关键算子串联而成：
+This pipeline is chained together by three key operators:
 
-#### A. **FixPromptedVQAGenerator（原始生成）**
+#### A. **Raw Generation (FixPromptedVQAGenerator)**
 
-* **功能**：使用 CapRL 预设的 Prompt 模板（`SYS_PROMPT_MCQ` / `USER_PROMPT_MCQ`），让 VLM 一次性生成 5 道 MCQ。
-* **输出**：包含多个 `#### Question` 和选项的非结构化文本块。
+* **Function**: Uses the preset CapRL prompt templates (`SYS_PROMPT_MCQ` / `USER_PROMPT_MCQ`) to instruct the VLM to generate 5 MCQs in one go.
+* **Output**: Unstructured text blocks containing multiple `#### Question` headers and options.
 
-#### B. **FunctionalRefiner（正则解析）**
+#### B. **Structured Parsing (FunctionalRefiner)**
 
-* **逻辑函数**：`parse_mcq_text_logic`
-* **功能**：利用正则表达式从原始文本中提取题目、选项（A-F）和正确答案。
-* **输出**：结构化的 MCQ 列表 (`parsed_mcq_list`)。
+* **Logic Function**: `parse_mcq_text_logic`
+* **Function**: Extracts the questions, options (A-F), and correct answers from the raw text using regular expressions.
+* **Output**: A structured list of MCQs (`parsed_mcq_list`).
 
-#### C. **VisualDependencyRefiner（依赖性验证）**
+#### C. **Dependency Verification (VisualDependencyRefiner)**
 
-这是本流水线的核心过滤器。它对每道题进行 N 次推理（N = `rotate_num`）：
+This is the core filter of the pipeline. It performs N inferences (N = `rotate_num`) for each question:
 
-1. **选项旋转**：随机打乱选项顺序（例如将答案从 A 换到 C），防止模型通过“总是选 A”来作弊。
-2. **有图推理 (Visual Pass)**：输入图像 + 题目。记录模型答对的比例。
-3. **无图推理 (Textual Pass)**：仅输入题目（无图像进行盲测）。记录模型盲猜对的比例。
-4. **过滤判据**：
+1. **Option Rotation**: Randomly shuffles the option order (e.g., moving the answer from A to C) to prevent the model from cheating by "always choosing A".
+2. **Visual Pass**: Inputs Image + Question. Records the proportion of correct answers.
+3. **Textual Pass (Blind Test)**: Inputs Question only (No Image). Records the proportion of correct blind guesses.
+4. **Filtering Criteria**:
+* Retains the question if and only if: `Visual_Acc >= pass_visual_min` **AND** `Textual_Acc <= pass_textual_max`.
+* *Example*: If a question can be answered correctly without looking at the image (high textual accuracy), it relies on common sense rather than visual info, and is **discarded**.
 
-* 保留题目，当且仅当：`Visual_Acc >= pass_visual_min` **且** `Textual_Acc <= pass_textual_max`。
-* *示例*：如果一道题不看图也能答对（无图准确率高），说明它考的是常识而非视觉，**剔除**。
 
-### 3. **输出数据**
 
-输出数据 (`final_mcqs`) 仅包含通过了严苛验证的题目。这些题目具有极高的质量和视觉相关性。
+### 3. **Output Data**
 
-**输出数据示例**：
+The output data (`final_mcqs`) only contains questions that have passed the rigorous verification. These questions possess extremely high quality and visual relevance.
+
+**Output Data Example**:
 
 ```json
 {
@@ -186,8 +145,8 @@ python image_visual_only_mcq_pipeline.py
             "question": "What is the color of the car on the far left?\n - A) Red\n - B) Blue...",
             "answer": "A",
             "stats": {
-                "visual_acc": 1.0,  # 4次全对
-                "text_acc": 0.0     # 盲猜全错
+                "visual_acc": 1.0,  
+                "text_acc": 0.0     
             }
         }
     ]
@@ -197,11 +156,13 @@ python image_visual_only_mcq_pipeline.py
 
 ---
 
-## 4. 流水线示例
+## 4. Pipeline Example
 
-以下是完整的 `VisualOnlyMCQPipeline` 代码实现 (GPU 版本)。
+Below is the complete `VisualOnlyMCQPipeline` code implementation (API Version).
 
 ```python
+import os
+os.environ["DF_API_KEY"] = "sk-xxxx"
 import argparse
 from dataflow.utils.storage import FileStorage
 from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
@@ -209,7 +170,7 @@ from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
 from dataflow.operators.core_vision import FixPromptedVQAGenerator, VisualDependencyRefiner
 from dataflow.operators.core_text import FunctionalRefiner
 from dataflow.prompts.image import ImageCaprlPrompt
-
+from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 import re
 from typing import List, Dict, Any
 
@@ -276,11 +237,8 @@ def parse_mcq_text_logic(mcq_text: str, expected: int = 5) -> List[Dict[str, Any
 class VisualOnlyMCQPipeline:
     def __init__(
         self,
-        model_path: str,
         *,
         first_entry_file: str,
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
         cache_path: str = "../cache/cache_mcq",
         file_name_prefix: str = "vis_mcq",
         # Config
@@ -292,7 +250,6 @@ class VisualOnlyMCQPipeline:
         input_image_key: str = "image",
         output_key: str = "final_mcqs",
         # VLLM
-        device: str = "cuda",
         vllm_max_tokens: int = 2048
     ):
         self.storage = FileStorage(
@@ -301,15 +258,15 @@ class VisualOnlyMCQPipeline:
             file_name_prefix=file_name_prefix,
             cache_type="jsonl"
         )
-        
-        self.serving = LocalModelVLMServing_vllm(
-            hf_cache_dir=hf_cache_dir,
-            hf_local_dir=download_dir,
-            hf_model_name_or_path=model_path,
-            vllm_tensor_parallel_size=1,
-            vllm_temperature=0.1, 
-            vllm_max_tokens=vllm_max_tokens
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="[https://dashscope.aliyuncs.com/compatible-mode/v1](https://dashscope.aliyuncs.com/compatible-mode/v1)", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
         )
+
         
         # Keys
         self.keys = {
@@ -327,7 +284,7 @@ class VisualOnlyMCQPipeline:
         # 1. Generate Raw MCQs (FixPromptedVQAGenerator)
         # 直接使用 prompt 类中的字符串
         self.op_gen_raw = FixPromptedVQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             system_prompt=self.prompts_db["SYS_PROMPT_MCQ"],
             user_prompt=self.prompts_db["USER_PROMPT_MCQ"]
         )
@@ -338,7 +295,7 @@ class VisualOnlyMCQPipeline:
         # 3. Verify Visual Dependency (Refine)
         # 传入 prompt 模板
         self.op_verify = VisualDependencyRefiner(
-            serving=self.serving,
+            serving=self.vlm_serving,
             instruction_template=self.prompts_db["ANSWER_INSTRUCTION"],
             rotate_num=rotate_num,
             pass_visual_min=pass_visual_min,
@@ -374,10 +331,7 @@ class VisualOnlyMCQPipeline:
 
 if __name__ == "__main__":
     pipe = VisualOnlyMCQPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
         first_entry_file="../example_data/capsbench_images/image_visual_only_mcq_demo.jsonl",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
         rotate_num=4,
         pass_visual_min=1.0,
         pass_textual_max=0.25

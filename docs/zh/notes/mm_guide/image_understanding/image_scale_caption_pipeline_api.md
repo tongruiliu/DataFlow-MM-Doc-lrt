@@ -1,35 +1,35 @@
 ---
-title: ScaleCap High-Density Caption Pipeline
-icon: mdi:image-text
+title: ScaleCap 高密度描述生成流水线（API版）
 createTime: 2026/01/11 22:08:57
-permalink: /en/mm_guide/image_scale_caption_pipeline/
+icon: mdi:image-text
+permalink: /zh/mm_guide/image_scale_caption_pipeline_api/
 ---
 
-## 1. Overview
+## 1. 概述
 
-The **Image Scale Caption Pipeline (ScaleCap)** is an advanced image captioning solution based on a **"Generate-Verify-Expand-Integrate"** paradigm. This pipeline is designed to generate image descriptions with **extremely high information density** and **ultra-low hallucination rates**, making it particularly suitable for scenarios requiring deep understanding of image details.
+**ScaleCap 高密度描述生成流水线 (Image Scale Caption Pipeline)** 是一种基于**“生成-验证-扩展-融合”**范式的先进图像描述生成方案。该流水线旨在生成**信息密度极高**且**幻觉率极低**的图像描述，特别适用于需要深度理解图像细节的场景。
 
-The theoretical foundation of this method is derived from the paper *ScaleCap: Inference-Time Scalable Image Captioning via Dual-Modality Debiasing*. It gradually uncovers object and spatial details through multi-turn dialogue and visual grounding, effectively filtering out hallucinations produced by the model.
+该方法的理论基础源自论文 *ScaleCap: Inference-Time Scalable Image Captioning via Dual-Modality Debiasing*。它通过多轮对话和视觉自检（Visual Grounding），逐步挖掘图像中的对象与位置细节，并过滤掉模型产生的幻觉。
 
-We support the following application scenarios:
+我们支持以下应用场景：
 
-* **High-Quality Multimodal Dataset Construction**: Generating training data that is more detailed and accurate than standard captions.
-* **Fine-Grained Image Retrieval**: Providing highly detailed text for indexing.
-* **Blind Assistance / Image Accessibility**: Generating "what-you-see-is-what-you-get" detailed narrations.
+* **高质量多模态数据集构建**：生成比普通 Caption 更详尽、准确的训练数据。
+* **细粒度图像检索**：提供包含丰富细节的索引文本。
+* **盲人辅助/图像无障碍**：生成“所见即所得”的详细解说。
 
-The main process of the pipeline includes:
+流水线的主要流程包括：
 
-1. **Initial Caption Generation**: The VLM generates a basic description.
-2. **Visual Debiasing**: The description is split into sentences, and each is verified against visual evidence (Visual Grounding).
-3. **Detail Questioning**: Targeted questions regarding object attributes and spatial relations are generated based on the verified "Golden Sentences".
-4. **Answering & Secondary Verification**: The VLM answers the detail questions, followed by another round of visual grounding to filter out incorrect details.
-5. **Final Integration**: All verified information is woven into a coherent, comprehensive long caption.
+1. **初稿生成**：VLM 生成基础描述。
+2. **视觉自检 (Debiasing)**：将描述拆分为句子，逐句验证其是否被图像证据支持（Visual Grounding）。
+3. **细节追问**：针对通过验证的“黄金句子”，生成关于对象属性和位置的追问。
+4. **回答与再验证**：VLM 回答追问，并再次进行视觉自检以过滤错误细节。
+5. **最终融合**：将所有经过验证的信息融合成一段连贯的长描述。
 
 ---
 
-## 2. Quick Start
+## 2. 快速开始
 
-### Step 1: Create a New DataFlow Working Directory
+### 第一步：创建新的 DataFlow 工作文件夹
 
 ```bash
 mkdir run_dataflow
@@ -37,115 +37,87 @@ cd run_dataflow
 
 ```
 
-### Step 2: Initialize DataFlow-MM
+### 第二步：初始化 DataFlow-MM
 
 ```bash
 dataflowmm init
 
 ```
 
-You will then see:
+这时你会看到：
 
 ```bash
-gpu_pipelines/image_scale_caption_pipeline.py
+api_pipelines/image_scale_caption_api_pipeline.py
 
 ```
 
-### Step 3: Download Sample Data
+### 第三步：下载示例数据
 
 ```bash
 huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --local-dir ./example_data
 
 ```
 
-### Step 4: Configure Parameters
+### 第四步：配置 API Key
+
+在 `api_pipelines/image_scale_caption_api_pipeline.py` 中设置 API Key 环境变量：
 
 ```python
-if __name__ == "__main__":
-    pipe = ImageScaleCaptionPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
-        device="cuda",
-        first_entry_file="../example_data/capsbench_images/image_scale_caption_demo.jsonl",
-        cache_path="../cache/image_scale_caption",
-        file_name_prefix="scalecap",
-        input_image_key="image",
-        output_key="final_caption",
-        vllm_tensor_parallel_size=1,
-        vllm_max_tokens=1024
-    )
-    pipe.forward()
+import os
+os.environ["DF_API_KEY"] = "your_api_key"
 
 ```
 
-> **⚠️ Important Note on Model Path Configuration (Taking `Qwen2.5-VL-3B-Instruct` as an example):**
-> * **If you have already downloaded the model files:** Please change `model_path` to your local model path. **Crucially**, ensure that the model folder is named exactly `Qwen2.5-VL-3B-Instruct`; otherwise, the framework will fail to recognize it.
-> * **If you haven't downloaded the model yet:** You must specify a `download_dir` parameter that ends with `Qwen2.5-VL-3B-Instruct` (as shown in the default parameters). Failure to do so will also result in the model not being recognized after downloading.
-> 
-> 
+### 第五步：配置参数
 
-### Step 5: Run
+在 `api_pipelines/image_scale_caption_api_pipeline.py` 中配置 API 服务和输入数据路径：
+
+```python
+    def __init__(
+        self,
+        # Storage params
+        first_entry_file: str = "../example_data/capsbench_images/image_scale_caption_demo.jsonl",
+        cache_path: str = "../cache/image_scale_caption",
+        file_name_prefix: str = "scalecap",
+        cache_type: str = "jsonl",
+        # Keys
+        input_image_key: str = "image",
+        output_key: str = "final_caption",
+    ):
+
+```
+
+```python
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="[https://dashscope.aliyuncs.com/compatible-mode/v1](https://dashscope.aliyuncs.com/compatible-mode/v1)", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
+        )
+
+```
+
+### 第六步：一键运行
 
 ```bash
-cd gpu_pipelines
-python image_scale_caption_pipeline.py
+cd api_pipelines
+python image_scale_caption_api_pipeline.py
 
 ```
-
-> **🛠️ Troubleshooting**
-> **Issue 1:** If you encounter a CUDA library conflict error similar to the following:
-> `ImportError: .../miniconda3/envs/Dataflow-MM/lib/python3.12/site-packages/torch/lib/../../nvidia/cusparse/lib/libcusparse.so.12: undefined symbol: __nvJitLinkComplete_12_4, version libnvJitLink.so.12`
-> **Solution:** This is usually caused by conflicting environment variables. Run the script with an empty `LD_LIBRARY_PATH`:
-> ```bash
-> LD_LIBRARY_PATH="" python image_scale_caption_pipeline.py
-> 
-> ```
-> 
-> 
-> **Issue 2:** If you are using **Qwen series models** and encounter the following error:
-> `KeyError: "Missing required keys in rope_scaling for 'rope_type'='None': {'rope_type'}"`
-> **Solution:** Open the `config.json` file located in your model folder, find the `rope_scaling` section, and change the key `"type"` to `"rope_type"`.
-> **Before modification:**
-> ```json
-> "rope_scaling": {
->   "type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
-> **After modification:**
-> ```json
-> "rope_scaling": {
->   "rope_type": "mrope",
->   "mrope_section": [
->     16,
->     24,
->     24
->   ]
-> }
-> 
-> ```
-> 
-> 
 
 ---
 
-## 3. Data Flow & Logic
+## 3. 数据流与流水线逻辑
 
-### 1. **Input Data**
+### 1. **输入数据**
 
-The input data for this process is very simple, requiring only the image path:
+输入数据非常简单，仅需图像路径：
 
-* **image**: Path to the image file.
+* **image**：图像文件路径。
 
-**Input Data Example**:
+**输入数据示例**：
 
 ```json
 {
@@ -154,55 +126,55 @@ The input data for this process is very simple, requiring only the image path:
 
 ```
 
-### 2. **Core Operator Logic**
+### 2. **核心算子逻辑**
 
-This pipeline orchestrates multiple fine-grained operators to achieve the complex ScaleCap logic:
+该流水线是多个原子算子的复杂编排：
 
-#### A. **Initial Generation (PromptedVQAGenerator)**
+#### A. **初稿生成 (PromptedVQAGenerator)**
 
-* **Function**: Uses a basic prompt to generate a preliminary description of the image (`init_caption`).
+* **功能**：使用基础 Prompt 生成图像的初步描述 (`init_caption`)。
 
-#### B. **Visual Debiasing (VisualGroundingRefiner)**
+#### B. **视觉自检 (VisualGroundingRefiner)**
 
-* **Function**: The core anti-hallucination mechanism of ScaleCap.
-* **Logic**:
-1. Uses `split_sentences` to break the initial draft into single sentences.
-2. Asks the VLM: "Given the image, is the description '{text}' directly supported by visual evidence?".
-3. Retains only the sentences that receive a "Yes", forming **"Golden Sentences"**.
-
-
-
-#### C. **Question Generation & Parsing (PromptTemplatedQAGenerator)**
-
-* **Function**: Uses LLM capabilities to generate targeted follow-up questions based on the Golden Sentences.
-* **Logic**: The model generates text like "Describe more details about the [Object]". The `parse_questions_logic` function automatically expands these into two categories: **object details** and **spatial relationships**.
-
-#### D. **Batch Answering & Secondary Filtering (BatchVQAGenerator & Refiner)**
-
-* **Function**: Deeply mines visual information.
-* **Logic**:
-1. Uses `BatchVQAGenerator` to have the VLM answer all generated questions in a single batch.
-2. Uses `VisualGroundingRefiner` again to verify if these newly generated details are accurate.
-3. Retains reliable details (`final_details`).
+* **功能**：这是 ScaleCap 的核心防幻觉机制。
+* **逻辑**：
+1. 使用 `split_sentences` 将初稿拆分为单句。
+2. 调用 VLM 询问：“Given the image, is the description '{text}' directly supported by visual evidence?”。
+3. 仅保留回答为 "Yes" 的句子，形成 **"Golden Sentences"**。
 
 
 
-#### E. **Final Integration (PromptTemplatedQAGenerator)**
+#### C. **问题生成与解析 (PromptTemplatedQAGenerator)**
 
-* **Function**: Rewrites the "Golden Sentences" and "Verified Details" into a fluent, cohesive text.
-* **Output**: `final_caption`.
+* **功能**：基于 Golden Sentences，利用 LLM 能力生成针对性的追问。
+* **逻辑**：模型生成如 "Describe more details about the [Object]" 的文本，并通过 `parse_questions_logic` 自动扩展为**对象细节**和**位置关系**两类问题。
 
-### 3. **Output Data**
+#### D. **批量回答与二次过滤 (BatchVQAGenerator & Refiner)**
 
-The output data records the entire pipeline process for easy debugging and analysis:
+* **功能**：挖掘图像深层信息。
+* **逻辑**：
+1. 使用 `BatchVQAGenerator` 一次性让 VLM 回答上述生成的所有问题。
+2. 再次使用 `VisualGroundingRefiner` 检查这些新生成的细节是否准确。
+3. 保留可靠的细节信息 (`final_details`)。
 
-* **init_caption**: The original initial draft.
-* **golden_sentences**: List of sentences that passed the first debiasing check.
-* **q_list**: List of generated follow-up questions.
-* **final_details**: Detailed answers that passed the secondary check.
-* **final_caption**: The final high-density description.
 
-**Output Data Example**:
+
+#### E. **最终融合 (PromptTemplatedQAGenerator)**
+
+* **功能**：将“黄金句子”和“验证后的细节”重写为一段流畅的文本。
+* **输出**：`final_caption`。
+
+### 3. **输出数据**
+
+输出数据记录了流水线的全过程，方便调试和分析：
+
+* **init_caption**：原始生成的初稿。
+* **golden_sentences**：通过第一次自检的句子列表。
+* **q_list**：生成的追问列表。
+* **final_details**：通过第二次自检的细节回答。
+* **final_caption**：最终的高密度描述。
+
+**输出数据示例**：
 
 ```json
 {
@@ -218,25 +190,27 @@ The output data records the entire pipeline process for easy debugging and analy
 
 ---
 
-## 4. Pipeline Example
+## 4. 流水线示例
 
-Below is the complete `ImageScaleCaptionPipeline` code implementation (GPU Version).
+以下是完整的 `ImageScaleCaptionPipeline` 代码实现 (API 版本)。
 
 ```python
+import os
+os.environ["DF_API_KEY"] = "sk-xxxx"
+
+
 import re
 import argparse
 from typing import Callable, Any, List
 
 from dataflow.utils.storage import FileStorage
 
-from dataflow.serving.local_model_vlm_serving import LocalModelVLMServing_vllm
-
 from dataflow.prompts.prompt_template import NamedPlaceholderPromptTemplate
 from dataflow.prompts.image import ImageScaleCaptionPrompt
 
 from dataflow.operators.core_vision import PromptedVQAGenerator, BatchVQAGenerator, VisualGroundingRefiner
 from dataflow.operators.core_text import PromptTemplatedQAGenerator, FunctionalRefiner
-
+from dataflow.serving.api_vlm_serving_openai import APIVLMServing_openai
 
 def split_sentences(text: str) -> List[str]:
     """将文本拆分为句子列表"""
@@ -304,11 +278,6 @@ def parse_questions_logic(text: str, max_q: int = 20) -> List[str]:
 class ImageScaleCaptionPipeline:
     def __init__(
         self,
-        model_path: str,
-        *,
-        hf_cache_dir: str | None = None,
-        download_dir: str = "./ckpt/models",
-        device: str = "cuda",
         # Storage params
         first_entry_file: str = "images.jsonl",
         cache_path: str = "./cache_scalecap",
@@ -332,14 +301,13 @@ class ImageScaleCaptionPipeline:
         )
 
         # 2. Serving
-        self.serving = LocalModelVLMServing_vllm(
-            hf_model_name_or_path=model_path,
-            hf_cache_dir=hf_cache_dir,
-            hf_local_dir=download_dir,
-            vllm_tensor_parallel_size=vllm_tensor_parallel_size,
-            vllm_temperature=vllm_temperature,
-            vllm_top_p=vllm_top_p,
-            vllm_max_tokens=vllm_max_tokens,
+        self.vlm_serving = APIVLMServing_openai(
+            api_url="[https://dashscope.aliyuncs.com/compatible-mode/v1](https://dashscope.aliyuncs.com/compatible-mode/v1)", # Any API platform compatible with OpenAI format
+            model_name="gpt-4o-mini",
+            image_io=None,
+            send_request_stream=False,
+            max_workers=10,
+            timeout=1800
         )
 
         # 3. Prompts
@@ -357,7 +325,7 @@ class ImageScaleCaptionPipeline:
         
         # 生成初稿 (使用通用 PromptedVQAGenerator)
         self.gen_init_caption = PromptedVQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             system_prompt="You are a helpful assistant."
         )
 
@@ -367,7 +335,7 @@ class ImageScaleCaptionPipeline:
         
         # 视觉自检 (保留 Yes 的句子)
         self.refine_golden = VisualGroundingRefiner(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template="Given the image, is the description '{text}' directly supported by visual evidence? Answer strictly yes or no."
         )
 
@@ -381,7 +349,7 @@ class ImageScaleCaptionPipeline:
             join_list_with="\n"
         )
         self.gen_questions_text = PromptTemplatedQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template=tpl_q
         )
         
@@ -390,11 +358,11 @@ class ImageScaleCaptionPipeline:
 
         # --- Step D: Generate Answers ---
         # 批量回答 (One Image -> Many Qs)
-        self.gen_answers = BatchVQAGenerator(serving=self.serving)
+        self.gen_answers = BatchVQAGenerator(serving=self.vlm_serving)
         
         # 回答过滤
         self.refine_answers = VisualGroundingRefiner(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template="Given the image, is the statement '{text}' grounded in the image and not generic? Answer strictly yes or no."
         )
 
@@ -405,7 +373,7 @@ class ImageScaleCaptionPipeline:
             join_list_with="\n"
         )
         self.gen_final_caption = PromptTemplatedQAGenerator(
-            serving=self.serving,
+            serving=self.vlm_serving,
             prompt_template=tpl_final
         )
 
@@ -493,19 +461,13 @@ class ImageScaleCaptionPipeline:
 
 
 if __name__ == "__main__":
-    pipe = ImageScaleCaptionPipeline(
-        model_path="Qwen/Qwen2.5-VL-3B-Instruct",
-        hf_cache_dir="~/.cache/huggingface",
-        download_dir="../ckpt/models/Qwen2.5-VL-3B-Instruct",
-        device="cuda",
-        
+
+    pipe = ImageScaleCaptionPipeline( 
         first_entry_file="../example_data/capsbench_images/image_scale_caption_demo.jsonl",
         cache_path="../cache/image_scale_caption",
         file_name_prefix="scalecap",
-        
         input_image_key="image",
         output_key="final_caption",
-        
         vllm_tensor_parallel_size=1,
         vllm_max_tokens=1024
     )
