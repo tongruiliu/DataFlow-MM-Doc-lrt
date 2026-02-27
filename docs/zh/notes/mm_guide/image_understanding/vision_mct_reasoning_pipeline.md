@@ -45,7 +45,7 @@ dataflowmm init
 这时你会看到：
 
 ```bash
-gpu_pipelines/vision_mcts_pipeline.py
+gpu_pipelines/vision_mct_reasoning_pipeline.py
 
 ```
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
 ```bash
 cd gpu_pipelines
-python vision_mcts_pipeline.py
+python vision_mct_reasoning_pipeline.py
 
 ```
 
