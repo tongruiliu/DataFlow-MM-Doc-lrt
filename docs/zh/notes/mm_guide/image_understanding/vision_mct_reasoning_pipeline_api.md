@@ -45,7 +45,7 @@ dataflowmm init
 这时你会看到：
 
 ```bash
-api_pipelines/vision_mcts_api_pipeline.py
+api_pipelines/vision_mct_reasoning_api_pipeline.py
 
 ```
 
@@ -58,7 +58,7 @@ huggingface-cli download --repo-type dataset OpenDCAI/dataflow-demo-image --loca
 
 ### 第四步：配置 API Key
 
-在 `api_pipelines/vision_mcts_api_pipeline.py` 中设置 API Key 环境变量：
+在 `api_pipelines/vision_mct_reasoning_api_pipeline.py` 中设置 API Key 环境变量：
 
 ```python
 import os
@@ -82,7 +82,7 @@ os.environ["DF_API_KEY"] = "your_api_key"
 
 ```bash
 cd api_pipelines
-python vision_mcts_api_pipeline.py
+python vision_mct_reasoning_api_pipeline.py
 
 ```
 
